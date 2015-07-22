@@ -7,8 +7,8 @@ from sklearn.linear_model import LogisticRegression
 
 
 if len(sys.argv) < 3:
-	print "usage: python abswap.py image brush"
-	exit()
+    print "usage: python abswap.py image brush"
+    exit()
 
 num_objs = 4
 
@@ -23,8 +23,11 @@ height = im_shape[1]
 actual_img = actual_img.reshape((width*height,1))
 brush_img = brush_img.reshape((width*height,3))
 
+indices = np.arange(actual_img.size).reshape(im_shape).astype(np.int32)
+
 labels = np.zeros((width*height),dtype=np.uint8)
 regional_weights = np.zeros((width*height,num_objs))
+
 graph_size = width*height
 
 obj0samples = []
@@ -69,10 +72,20 @@ t1 = time.time()
 regional_weights = lgr.predict_log_proba(actual_img)
 print "time to calculate regional weights " + str(time.time() - t1)
 
+# get adjacent edges
+# right edges = (left_node[i],right_node[i])
+left_nodes = indices[:, :-1].ravel()
+right_nodes = indices[:, 1:].ravel()
+
+
+#down edges = (up_node[i],down_node[i]) 
+down_node = indices[1:, :].ravel()
+up_node = indices[:-1,:].ravel()
+
 #for alpha,beta in combinations(range(num_objs),2):
-	# construct graph:
-	# We need all pixels that are labeled with alpha and beta
-	# add them as nodes using pygraph.add_node
-	# add edges if neighbors, else add weight to t_edges
-	# maxflow
-	# use what_segment to determine new labels
+    # construct graph:
+    # We need all pixels that are labeled with alpha and beta
+    # add them as nodes using pygraph.add_node
+    # add edges if neighbors, else add weight to t_edges
+    # maxflow
+    # use what_segment to determine new labels
