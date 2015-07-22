@@ -5,6 +5,11 @@ import sys
 import time
 from sklearn.linear_model import LogisticRegression
 
+def neighbor_cost_boykov(p1, p2, alpha):
+    pdiff = p1 - p2
+    e_term = -(pdiff * pdiff)/(2 * alpha * alpha)
+    cost = math.exp(e_term)
+    return cost
 
 if len(sys.argv) < 3:
     print "usage: python abswap.py image brush"
@@ -25,7 +30,7 @@ brush_img = brush_img.reshape((width*height,3))
 
 indices = np.arange(actual_img.size).reshape(im_shape).astype(np.int32)
 
-labels = np.zeros((width*height),dtype=np.uint8)
+labels = np.random.randint(0,num_objs,(width*height))
 regional_weights = np.zeros((width*height,num_objs))
 
 graph_size = width*height
@@ -35,34 +40,32 @@ obj1samples = []
 obj2samples = []
 obj3samples = []
 
+#masks for samples and intial labeling
+red_band = brush_img[:,0]
+green_band = brush_img[:,1]
+blue_band = brush_img[:,2]
 
-# assign labels and collect samples based on brush image
+red_mask = np.logical_and(red_band > 200,green_band < 200)
+blue_mask = np.logical_and(blue_band > 200,green_band < 200)
+green_mask = np.logical_and(green_band > 200,red_band < 200)
+yellow_mask_1 = np.logical_and(red_band > 200,green_band > 200)
+yellow_mask = np.logical_and(yellow_mask_1,blue_band<200)
+
+labels[red_mask] = 0
+labels[yellow_mask] = 1
+labels[blue_mask] = 2
+labels[green_mask] = 3
+
 t1 = time.time()
-for i, cur_pix in enumerate(brush_img):
-    #label 0
-    if cur_pix[0] > 250 and cur_pix[1] < 10:
-        obj0samples.append(actual_img[i])
-        labels[i] = 0
-    #label 1
-    elif cur_pix[0] < 10  and cur_pix[1] > 250:
-        obj1samples.append(actual_img[i])
-        labels[i] = 1
-    #label 2
-    elif cur_pix[0] < 10  and cur_pix[2] > 250:
-        obj2samples.append(actual_img[i])
-        labels[i] = 2
-    #label 3
-    elif cur_pix[0] > 250 and cur_pix[1] > 250:
-        obj3samples.append(actual_img[i])
-        labels[i] = 3
-    # assign random label
-    else:
-        labels[i] = np.random.randint(0,4)
-print "time to establish initial labelling " + str(time.time() - t1)
+obj0samples = actual_img[red_mask]
+obj1samples = actual_img[blue_mask]
+obj2samples = actual_img[green_mask]
+obj3samples = actual_img[yellow_mask]
+print "time to get samples " + str(time.time() - t1)
 
-sample_mat = np.array(obj0samples + obj1samples + obj2samples + obj3samples)
-sample_mat = sample_mat.reshape((sample_mat.shape[0],1))
-label_mat = np.array([0]*len(obj0samples) + [1]*len(obj1samples) + [2]*len(obj2samples) + [3]*len(obj3samples))
+sample_mat = np.concatenate((obj0samples,obj1samples, obj2samples, obj3samples))    
+sample_mat = sample_mat.reshape((sample_mat.size,1))
+label_mat = np.array([0]*obj0samples.size + [1]*obj1samples.size + [2]*obj2samples.size + [3]*obj3samples.size)
 
 
 lgr = LogisticRegression(solver='lbfgs', multi_class='multinomial')
