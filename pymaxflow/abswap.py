@@ -6,9 +6,9 @@ import time
 from sklearn.linear_model import LogisticRegression
 
 def neighbor_cost_boykov(p1, p2, alpha):
-    pdiff = p1 - p2
-    e_term = -(pdiff * pdiff)/(2 * alpha * alpha)
-    cost = math.exp(e_term)
+    pdiff = np.absolute(np.subtract(p1,p2))
+    e_term = np.negative((np.multiply(pdiff,pdiff)))/(2 * alpha * alpha)
+    cost = np.exp(e_term)
     return cost
 
 if len(sys.argv) < 3:
@@ -67,7 +67,6 @@ sample_mat = np.concatenate((obj0samples,obj1samples, obj2samples, obj3samples))
 sample_mat = sample_mat.reshape((sample_mat.size,1))
 label_mat = np.array([0]*obj0samples.size + [1]*obj1samples.size + [2]*obj2samples.size + [3]*obj3samples.size)
 
-
 lgr = LogisticRegression(solver='lbfgs', multi_class='multinomial')
 lgr.fit(sample_mat,label_mat)
 
@@ -79,11 +78,12 @@ print "time to calculate regional weights " + str(time.time() - t1)
 # right edges = (left_node[i],right_node[i])
 left_nodes = indices[:, :-1].ravel()
 right_nodes = indices[:, 1:].ravel()
-
+side_weights = neighbor_cost_boykov(left_nodes,right_nodes,100)
 
 #down edges = (up_node[i],down_node[i]) 
 down_node = indices[1:, :].ravel()
 up_node = indices[:-1,:].ravel()
+vert_weights = neighbor_cost_boykov(down_node,up_node,100)
 
 #for alpha,beta in combinations(range(num_objs),2):
     # construct graph:
