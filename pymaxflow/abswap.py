@@ -133,8 +133,8 @@ for alpha,beta in combinations(range(num_objs),2):
     g.add_node(graph_size)
     
     g.add_edge_vectorized(e1,e2,boundary_weights[edge_mask],boundary_weights[edge_mask])
-
-    t1 = time.time()
+    
+    # this needs speed up
     for i in graph_indices:
         
         left = i-1
@@ -184,6 +184,16 @@ for alpha,beta in combinations(range(num_objs),2):
 
     t1=time.time()
     g.maxflow()
-    print "time for maxflow" + str(time.time() -t1)
+    print "time for maxflow " + str(time.time() -t1)
 
-    print g.what_segment_vectorized()
+    out = g.what_segment_vectorized()
+    
+    # this needs speed up
+    for i, label in enumerate(out):
+        index = graph_indices[i]
+        if label == 0:
+            labels[index] = alpha
+        else:
+            labels[index] = beta
+
+imsave('test_ct_cython.png',labels.reshape((width,height)))
