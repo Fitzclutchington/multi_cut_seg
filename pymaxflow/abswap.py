@@ -4,6 +4,7 @@ from pymaxflow import PyGraph
 import sys
 import time
 from sklearn.linear_model import LogisticRegression
+from itertools import combinations
 
 def neighbor_cost_boykov(p1, p2, alpha):
     pdiff = np.absolute(np.subtract(p1,p2))
@@ -81,14 +82,47 @@ right_nodes = indices[:, 1:].ravel()
 side_weights = neighbor_cost_boykov(left_nodes,right_nodes,100)
 
 #down edges = (up_node[i],down_node[i]) 
-down_node = indices[1:, :].ravel()
-up_node = indices[:-1,:].ravel()
-vert_weights = neighbor_cost_boykov(down_node,up_node,100)
+down_nodes = indices[1:, :].ravel()
+up_nodes = indices[:-1,:].ravel()
+vert_weights = neighbor_cost_boykov(down_nodes,up_nodes,100)
 
-#for alpha,beta in combinations(range(num_objs),2):
-    # construct graph:
-    # We need all pixels that are labeled with alpha and beta
-    # add them as nodes using pygraph.add_node
-    # add edges if neighbors, else add weight to t_edges
-    # maxflow
-    # use what_segment to determine new labels
+print left_nodes.shape
+print up_nodes.shape
+v1 = np.concatenate((left_nodes,up_nodes))
+v1 = v1.reshape((v1.size,1))
+
+v2 = np.concatenate((right_nodes, down_nodes))
+v2 = v2.reshape((v2.size,1))
+
+boundary_weights = np.concatenate((side_weights,vert_weights))
+boundary_weights = boundary_weights.reshape((boundary_weights.size,1))
+
+for alpha,beta in combinations(range(num_objs),2):
+
+    alpha_beta_mask = np.logical_or(labels == alpha, labels == beta)
+    graph_indices = indices.reshape((indices.size,1))[alpha_beta_mask]
+    graph_size = graph_indices.size
+
+    node_map = np.full((actual_img.size,1),-1)
+    node_map[alpha_beta_mask] = np.array(range(0,graph_indices.size)).reshape((graph_indices.size,1))
+
+    #r_weights = regional_weights[alpha_beta_mask]
+    g = PyGraph(graph_size, graph_size * 4)
+
+    g.add_node(graph_size)
+    
+    #generate boundary edges
+    t1 = time.time()
+    for pix_loc, node in enumerate(node_map):
+        if node != -1:
+            v1_mask = v1[:,:] == pix_loc
+            edge_list_v1 = v1[v1_mask]
+            edge_list_v2 = v2[v1_mask]
+
+            for j in edge_list_v2:
+                if node_map[j] != 1:
+                    v2_mask = v2[:,:] == j
+                    weight_loc = np.logical_and(v1_mask,v2_mask).nonzero()
+                    g.add_edge(node, node_map[j],boundary_weights[weight_loc[0]],boundary_weights[weight_loc[0]])
+    print time.time() - t1
+    
