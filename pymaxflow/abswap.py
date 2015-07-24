@@ -5,11 +5,18 @@ import sys
 import time
 from sklearn.linear_model import LogisticRegression
 from itertools import combinations
+import math
 
 def neighbor_cost_boykov(p1, p2, alpha):
     pdiff = np.absolute(np.subtract(p1,p2))
     e_term = np.negative((np.multiply(pdiff,pdiff)))/(2 * alpha * alpha)
     cost = np.exp(e_term)
+    return cost
+
+def neighbor_cost_boykov_scalar(p1, p2, alpha):
+    pdiff = p1 - p2
+    e_term = -(pdiff * pdiff)/(2 * alpha * alpha)
+    cost = math.exp(e_term)
     return cost
 
 if len(sys.argv) < 3:
@@ -74,6 +81,7 @@ lgr.fit(sample_mat,label_mat)
 t1 = time.time()
 regional_weights = lgr.predict_log_proba(actual_img)
 print "time to calculate regional weights " + str(time.time() - t1)
+print regional_weights.shape
 
 # get adjacent edges
 # right edges = (left_node[i],right_node[i])
@@ -97,10 +105,17 @@ v2 = v2.reshape((v2.size))
 boundary_weights = np.concatenate((side_weights,vert_weights))
 boundary_weights = boundary_weights.reshape((boundary_weights.size)).astype(np.float32)
 
+t1= time.time()
+boundary_weight_dict = {}
+for i in range(v1.shape[0]):
+    boundary_weight_dict[(v1[i],v2[i])] = boundary_weights[i]
+    
+print time.time() - t1
+
 for alpha,beta in combinations(range(num_objs),2):
 
     alpha_beta_mask = np.logical_or(labels == alpha, labels == beta)
-    graph_indices = indices.reshape((indices.size,1))[alpha_beta_mask]
+    graph_indices = indices.reshape((indices.size))[alpha_beta_mask]
     graph_size = graph_indices.size
 
     node_map = np.full((actual_img.size,1),-1)
@@ -112,10 +127,63 @@ for alpha,beta in combinations(range(num_objs),2):
     
     e1 = np.take(node_map,v1[edge_mask]).astype(np.int32)
     e2 = np.take(node_map,v2[edge_mask]).astype(np.int32)
-    #r_weights = regional_weights[alpha_beta_mask]
+    r_weights = regional_weights
     g = PyGraph(graph_size, graph_size * 4)
 
     g.add_node(graph_size)
     
     g.add_edge_vectorized(e1,e2,boundary_weights[edge_mask],boundary_weights[edge_mask])
-    
+
+    t1 = time.time()
+    for i in graph_indices:
+        
+        left = i-1
+        right = i+1
+        up = i-width
+        down = i+width
+
+        if left > -1:
+            if left % width != width -1:
+                if labels[left] != alpha or labels[left] != beta:
+                    try:
+                        r_weights[i][alpha] += boundary_weight_dict[(i,left)]
+                        r_weights[i][beta] += boundary_weight_dict[(i,left)]
+                    except KeyError:
+                        r_weights[i][alpha] += boundary_weight_dict[(left,i)]
+                        r_weights[i][beta] += boundary_weight_dict[(left,i)]
+
+        if right < actual_img.size:
+            if right % width != 0:
+                if labels[right] != alpha or labels[right] != beta:
+                    try:
+                        r_weights[i][alpha] += boundary_weight_dict[(i,right)]
+                        r_weights[i][beta] += boundary_weight_dict[(i,right)]
+                    except KeyError:
+                        r_weights[i][alpha] += boundary_weight_dict[(right,i)]
+                        r_weights[i][beta] += boundary_weight_dict[(right,i)]
+
+        if up > -1:        
+            if labels[up] != alpha or labels[up] != beta:
+                try:
+                    r_weights[i][alpha] += boundary_weight_dict[(i,up)]
+                    r_weights[i][beta] += boundary_weight_dict[(i,up)]
+                except KeyError:
+                    r_weights[i][alpha] += boundary_weight_dict[(up,i)]
+                    r_weights[i][beta] += boundary_weight_dict[(up,i)]
+
+        if down < actual_img.size:        
+            if labels[down] != alpha or labels[down] != beta:
+                try:
+                    r_weights[i][alpha] += boundary_weight_dict[(i,down)]
+                    r_weights[i][beta] += boundary_weight_dict[(i,down)]
+                except KeyError:
+                    r_weights[i][alpha] += boundary_weight_dict[(down,i)]
+                    r_weights[i][beta] += boundary_weight_dict[(down,i)]
+   
+    g.add_tweights_vectorized(np.array(range(graph_size)).astype(np.int32),r_weights[:,alpha][alpha_beta_mask].astype(np.float32),r_weights[:,beta][alpha_beta_mask].astype(np.float32))
+
+    t1=time.time()
+    g.maxflow()
+    print "time for maxflow" + str(time.time() -t1)
+
+    print g.what_segment_vectorized()
