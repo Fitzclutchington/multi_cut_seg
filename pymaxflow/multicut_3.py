@@ -1,11 +1,12 @@
 import numpy as np
-from scipy.misc import imread, imsave
+from scipy.misc import imread, imsave, comb
 from pymaxflow import PyGraph
 import sys
 import time
 from sklearn.linear_model import LogisticRegression
 from itertools import combinations
 import math
+from utils import calculate_boundary_stats
 
 def neighbor_cost_boykov(p1, p2, alpha):
     pdiff = np.subtract(p1,p2)
@@ -21,7 +22,7 @@ def t_link_cost(std, mean, pixel):
     g = e / (std * sqrt2xmean)
     inf_mask = g==0
     g[inf_mask] = .000001
-    return np.negative(np.log(g))
+    return np.abs(np.log(g))
 
 def neighbor_cost_boykov_scalar(p1, p2, alpha):
     pdiff = p1 - p2
@@ -79,8 +80,12 @@ t1 = time.time()
 obj0samples = actual_img[green_mask]
 obj1samples = actual_img[blue_mask]
 obj2samples = actual_img[red_mask]
-print "time to get samples " + str(time.time() - t1)
 
+brush_strokes = [obj0samples,obj1samples,obj2samples]
+
+means, stds = calculate_boundary_stats(brush_strokes,50)
+combs = int(comb(num_objs,2))
+'''
 samples = [obj0samples, obj1samples, obj2samples]
 mean = []
 std = []
@@ -96,29 +101,35 @@ regional_weights = np.zeros((actual_img.size,3))
 regional_weights[:,0] = t_link_cost(std[0],mean[0],actual_img).T
 regional_weights[:,1] = t_link_cost(std[1],mean[1],actual_img).T
 regional_weights[:,2] = t_link_cost(std[2],mean[2],actual_img).T
+print regional_weights
+
 '''
 sample_mat = np.concatenate((obj0samples,obj1samples, obj2samples))    
 sample_mat = sample_mat.reshape((sample_mat.size,1))
 label_mat = np.array([0]*obj0samples.size + [1]*obj1samples.size + [2]*obj2samples.size )
 
-lgr = LogisticRegression(verbose=1)#solver='newton-cg')#,multi_class='multinomial')
+lgr = LogisticRegression()#solver='newton-cg')#,multi_class='multinomial')
 lgr.fit(sample_mat,label_mat)
 
 t1 = time.time()
-regional_weights = np.abs(lgr.predict_log_proba(actual_img))
-print "time to calculate regional weights " + str(time.time() - t1)
-'''
+regional_weights = np.abs(lgr.predict_proba(actual_img))
+
+for i in range(num_objs):
+    imsave('reg{}.png'.format(i),regional_weights[:,i].reshape((width,height)))
+
+
 
 # get adjacent edges
 # right edges = (left_node[i],right_node[i])
 left_nodes = indices[:, :-1].ravel()
 right_nodes = indices[:, 1:].ravel()
 side_weights = neighbor_cost_boykov(actual_img[left_nodes],actual_img[right_nodes],alpha)
+#for i in range(len(means):
 
 #down edges = (up_node[i],down_node[i]) 
 down_nodes = indices[1:, :].ravel()
 up_nodes = indices[:-1,:].ravel()
-vert_weights = neighbor_cost_boykov(actual_img[down_nodes],actual_img[up_nodes],alpha)
+#vert_weights = neighbor_cost_boykov(actual_img[down_nodes],actual_img[up_nodes],alpha)
 
 
 v1 = np.concatenate((left_nodes,up_nodes))
@@ -127,17 +138,21 @@ v1 = v1.reshape((v1.size))
 v2 = np.concatenate((right_nodes, down_nodes))
 v2 = v2.reshape((v2.size))
 
-boundary_weights = np.concatenate((side_weights,vert_weights))
-boundary_weights = boundary_weights.reshape((boundary_weights.size)).astype(np.float32) * 100
+boundary_weights = np.zeros((v1.size,combs))
+diffs = np.abs(np.subtract(actual_img[v1],actual_img[v2]))
+for i in range(combs):
+    boundary_weights[:,i] = t_link_cost(stds[i],means[i],diffs).T
 
 
+boundary_weights = boundary_weights.astype(np.float32) * 0.001
+print boundary_weights.dtype
 
 boundary_weight_dict = {}
 for i in range(v1.shape[0]):
     boundary_weight_dict[(v1[i],v2[i])] = boundary_weights[i]
 
 
-for alpha,beta in combinations(range(num_objs),2):
+for count, (alpha,beta) in enumerate(combinations(range(num_objs),2)):
 
     alpha_beta_mask = np.logical_or(labels == alpha, labels == beta)
     graph_indices = indices.reshape((indices.size))[alpha_beta_mask]
@@ -158,7 +173,7 @@ for alpha,beta in combinations(range(num_objs),2):
 
     g.add_node(graph_size)
     
-    g.add_edge_vectorized(e1,e2,boundary_weights[edge_mask],boundary_weights[edge_mask])
+    g.add_edge_vectorized(e1,e2,boundary_weights[:,count][edge_mask],boundary_weights[:,count][edge_mask])
     
     # this needs speed up
     t1=time.time()
@@ -173,39 +188,39 @@ for alpha,beta in combinations(range(num_objs),2):
             if left % width != width -1:
                 if labels[left] != alpha and labels[left] != beta:
                     try:
-                        r_weights[i][alpha] += boundary_weight_dict[(i,left)]
-                        r_weights[i][beta] += boundary_weight_dict[(i,left)]
+                        r_weights[i][alpha] += boundary_weight_dict[(i,left)][count]
+                        r_weights[i][beta] += boundary_weight_dict[(i,left)][count]
                     except KeyError:
-                        r_weights[i][alpha] += boundary_weight_dict[(left,i)]
-                        r_weights[i][beta] += boundary_weight_dict[(left,i)]
+                        r_weights[i][alpha] += boundary_weight_dict[(left,i)][count]
+                        r_weights[i][beta] += boundary_weight_dict[(left,i)][count]
 
         if right < actual_img.size:
             if right % width != 0:
                 if labels[right] != alpha and labels[right] != beta:
                     try:
-                        r_weights[i][alpha] += boundary_weight_dict[(i,right)]
-                        r_weights[i][beta] += boundary_weight_dict[(i,right)]
+                        r_weights[i][alpha] += boundary_weight_dict[(i,right)][count]
+                        r_weights[i][beta] += boundary_weight_dict[(i,right)][count]
                     except KeyError:
-                        r_weights[i][alpha] += boundary_weight_dict[(right,i)]
-                        r_weights[i][beta] += boundary_weight_dict[(right,i)]
+                        r_weights[i][alpha] += boundary_weight_dict[(right,i)][count]
+                        r_weights[i][beta] += boundary_weight_dict[(right,i)][count]
 
         if up > -1:        
             if labels[up] != alpha and labels[up] != beta:
                 try:
-                    r_weights[i][alpha] += boundary_weight_dict[(i,up)]
-                    r_weights[i][beta] += boundary_weight_dict[(i,up)]
+                    r_weights[i][alpha] += boundary_weight_dict[(i,up)][count]
+                    r_weights[i][beta] += boundary_weight_dict[(i,up)][count]
                 except KeyError:
-                    r_weights[i][alpha] += boundary_weight_dict[(up,i)]
-                    r_weights[i][beta] += boundary_weight_dict[(up,i)]
+                    r_weights[i][alpha] += boundary_weight_dict[(up,i)][count]
+                    r_weights[i][beta] += boundary_weight_dict[(up,i)][count]
 
         if down < actual_img.size:        
             if labels[down] != alpha and labels[down] != beta:
                 try:
-                    r_weights[i][alpha] += boundary_weight_dict[(i,down)]
-                    r_weights[i][beta] += boundary_weight_dict[(i,down)]
+                    r_weights[i][alpha] += boundary_weight_dict[(i,down)][count]
+                    r_weights[i][beta] += boundary_weight_dict[(i,down)][count]
                 except KeyError:
-                    r_weights[i][alpha] += boundary_weight_dict[(down,i)]
-                    r_weights[i][beta] += boundary_weight_dict[(down,i)]
+                    r_weights[i][alpha] += boundary_weight_dict[(down,i)][count]
+                    r_weights[i][beta] += boundary_weight_dict[(down,i)][count]
     print "time to add non graph negihboring pixels " + str(time.time() -t1)
     g.add_tweights_vectorized(np.array(range(graph_size)).astype(np.int32),r_weights[:,alpha][alpha_beta_mask].astype(np.float32),r_weights[:,beta][alpha_beta_mask].astype(np.float32))
 

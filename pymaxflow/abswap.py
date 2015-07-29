@@ -1,12 +1,12 @@
 import numpy as np
-from scipy.misc import imread, imsave
+from scipy.misc import imread, imsave, comb
 from pymaxflow import PyGraph
 import sys
 import time
 from sklearn.linear_model import LogisticRegression
 from itertools import combinations
 import math
-from utils import non_graph_weight_addition
+from utils import non_graph_weight_addition, calculate_boundary_stats
 
 def neighbor_cost_boykov(p1, p2, alpha):
     pdiff = np.subtract(p1,p2)
@@ -19,6 +19,16 @@ def neighbor_cost_boykov_scalar(p1, p2, alpha):
     e_term = -(pdiff * pdiff)/(2 * alpha * alpha)
     cost = math.exp(e_term)
     return cost
+
+def t_link_cost(std, mean, pixel):
+    sqrt2xmean = math.sqrt(mean*2)
+    d = pixel - mean
+    e_term = np.negative(np.multiply(d,d))/(2 * std * std)
+    e = np.exp(e_term)
+    g = e / (std * sqrt2xmean)
+    inf_mask = g==0
+    g[inf_mask] = .000001
+    return np.abs(np.log(g))
 
 if len(sys.argv) < 4:
     print "usage: python abswap.py image brush output alpha"
@@ -79,11 +89,12 @@ obj1samples = actual_img[red_mask]
 obj2samples = actual_img[blue_mask]
 obj3samples = actual_img[green_mask]
 
-print obj0samples.shape
-print obj1samples.shape
-print obj2samples.shape
-print obj3samples.shape
+brush_strokes = [obj0samples,obj1samples,obj2samples,obj3samples]
 
+means, stds = calculate_boundary_stats(brush_strokes,100)
+print means
+print stds
+combs = int(comb(num_objs,2))
 
 ##############################################
 #                                            #
@@ -98,7 +109,7 @@ label_mat = np.array([0]*obj0samples.size + [1]*obj1samples.size + [2]*obj2sampl
 lgr = LogisticRegression()#solver='lbfgs')#,multi_class='multinomial')
 lgr.fit(sample_mat,label_mat)
 
-regional_weights = np.abs(lgr.predict_log_proba(actual_img)).astype(np.float32)
+regional_weights = np.abs(lgr.predict_proba(actual_img)).astype(np.float32) 
 
 ##############################################
 #                                            #
@@ -124,8 +135,16 @@ v1 = v1.reshape((v1.size))
 v2 = np.concatenate((right_nodes, down_nodes))
 v2 = v2.reshape((v2.size))
 
-boundary_weights = np.concatenate((side_weights,vert_weights))
-boundary_weights = boundary_weights.reshape((boundary_weights.size)).astype(np.float32) * 100
+boundary_weights = np.zeros((v1.size,combs))
+print stds[3]
+diffs = np.abs(np.subtract(actual_img[v1],actual_img[v2]))
+for i in range(combs):
+    boundary_weights[:,i] = t_link_cost(stds[i],means[i],diffs).T
+
+boundary_weights = boundary_weights.astype(np.float32) * 0.001
+#boundary_weights = np.concatenate((side_weights,vert_weights))
+#boundary_weights = boundary_weights.reshape((boundary_weights.size)).astype(np.float32)
+#print boundary_weights
 
 # Dictionary used to add to terminal edges
 boundary_weight_dict = {}
@@ -138,7 +157,7 @@ for i in range(v1.shape[0]):
 #                             #
 ###############################
 
-for alpha,beta in combinations(range(num_objs),2):
+for count, (alpha,beta) in enumerate(combinations(range(num_objs),2)):
     alpha_beta_mask = np.logical_or(labels == alpha, labels == beta)
     #graph indices are the pixels locations that are included in the present ab graph
     graph_indices = indices.reshape((indices.size))[alpha_beta_mask]
@@ -168,12 +187,12 @@ for alpha,beta in combinations(range(num_objs),2):
 
     g.add_node(graph_size)
     
-    g.add_edge_vectorized(e1,e2,boundary_weights[edge_mask],boundary_weights[edge_mask])
+    g.add_edge_vectorized(e1,e2,boundary_weights[:,count][edge_mask],boundary_weights[:,count][edge_mask])
     
     # this needs speed up
     
     t1=time.time()
-    non_graph_weight_addition(graph_indices,r_weights,boundary_weight_dict,labels,alpha,beta,width,height)
+    non_graph_weight_addition(graph_indices,r_weights,boundary_weight_dict,labels,alpha,beta,width,height,count)
     print "time to add non graph negihboring pixels " + str(time.time() -t1)
 
     g.add_tweights_vectorized(np.array(range(graph_size)).astype(np.int32),r_weights[:,alpha][alpha_beta_mask],r_weights[:,beta][alpha_beta_mask])
@@ -196,6 +215,7 @@ black_mask = labels == 0
 grey_mask = labels == 1
 greyer_mask = labels == 2
 white_mask = labels == 3
+np.savetxt('labels', labels)
 
 labels[black_mask] = 0
 labels[grey_mask] = 50
