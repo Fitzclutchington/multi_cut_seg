@@ -8,3 +8,9 @@ setup(
     include_dirs=[np.get_include()],
     ext_modules = cythonize('pymaxflow.pyx')
 )
+
+setup(
+    name = "utils",
+    include_dirs=[np.get_include()],
+    ext_modules = cythonize('utils.pyx')
+)
