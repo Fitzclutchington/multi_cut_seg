@@ -1,0 +1,33 @@
+{
+  "training_images": [
+    "HG011/080_brush.png",
+    "HG011/100_brush.png",
+    "HG011/120_brush.png"
+  ],
+  "groundtruth_images": [
+    "HG011/GT/GT0080.png",
+    "HG011/GT/GT0100.png",
+    "HG011/GT/GT0120.png"
+  ],
+  "training_image_indices": [
+    80,
+    100,
+    120
+  ],
+  "features": [
+	"minimum",
+	"maximum",
+	"entropy"
+  ],
+  "case": "HG011",
+  "prefix" : "4m",
+  "outdir" : "seg_3b_4m_3f",
+  "dicomdir": "DCM",
+  "groundtruthdir": "GT",
+  "modalities": [
+    "Flair",
+	"T1",
+    "T1c",
+    "T2"
+    ]
+}

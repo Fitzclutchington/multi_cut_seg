@@ -143,16 +143,15 @@ def calculate_boundary_stats(brush_strokes,num_samples):
 
 def calculate_boundary_stats_lgr(brush_strokes,num_samples):
     '''
-    returns mean and std of the difference between random samples from 
+    returns mean and std of the difference between random samples from
     brush strokes
     '''
     num_classes = len(brush_strokes)
     com_list = combinations(range(num_classes),2)
-    sample_mat = np.zeros((num_classes * num_samples**2))
-    labels_mat = np.zeros((sample_mat.size))
+    sample_mat = np.zeros((comb(num_classes,2) * num_samples**2))
+    labels_mat = np.zeros((comb(num_classes,2) * num_samples**2))
     for j,com in enumerate(com_list):
         diffs = np.zeros((num_samples ** 2))
-        
         a_samples = np.random.choice(brush_strokes[com[0]][:,0],num_samples,replace=False)
         b_samples = np.random.choice(brush_strokes[com[1]][:,0],num_samples,replace=False)
         for i in range(num_samples):
@@ -161,13 +160,11 @@ def calculate_boundary_stats_lgr(brush_strokes,num_samples):
             diffs[start:end] = np.abs(np.subtract(np.roll(a_samples,i),b_samples))
         start = j*num_samples**2
         end = start + num_samples**2
-        
         sample_mat[start:end] = diffs
-        labels_mat[start:end] = j        
-    
+        labels_mat[start:end] = j
+            
     lgr = LogisticRegression()
-    lgr.fit(sample_mat,labels_mat)
-
+    lgr.fit(sample_mat.reshape((sample_mat.size,1)),labels_mat)
     return lgr
         
 def non_graph_weight_addition(graph_indices,r_weights,boundary_weight_dict,labels,alpha,beta,width,height):

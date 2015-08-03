@@ -6,7 +6,7 @@ import time
 from sklearn.linear_model import LogisticRegression
 from itertools import combinations
 import math
-from utils import calculate_boundary_stats, non_graph_weight_addition, non_graph_weight_addition_with_count
+from utils import calculate_boundary_stats, calculate_boundary_stats_lgr,non_graph_weight_addition, non_graph_weight_addition_with_count
 
 def neighbor_cost_boykov(p1, p2, alpha=.001):
     pdiff = np.subtract(p1,p2)
@@ -34,6 +34,13 @@ if len(sys.argv) < 4:
     print "usage: python abswap.py image brush output cost_weight boundary regional"
     exit()
 
+bound_dict = {'0':'boykov',
+              '1':'gaussian',
+              '2':'lgr'}
+
+reg_dict = {'0':'gaussian',
+            '1':'lgr'}
+
 num_objs = 3
 
 actual_img = imread(sys.argv[1], True)
@@ -52,7 +59,7 @@ brush_img = brush_img.reshape((width*height,3))
 
 indices = np.arange(actual_img.size).reshape(im_shape).astype(np.int32)
 
-labels = np.random.randint(0,num_objs,(width*height))
+labels = np.random.randint(0,num_objs,(width*height)).astype(np.int32)
 regional_weights = np.zeros((width*height,num_objs))
 
 graph_size = width*height
@@ -96,9 +103,7 @@ if regional_option == 0:
     for sample in samples:
         mean.append(np.mean(sample))
         std.append(np.std(sample))
-
-    print mean
-    print std   
+  
     regional_weights = np.zeros((actual_img.size,3))
 
     regional_weights[:,0] = t_link_cost(std[0],mean[0],actual_img).T
@@ -141,25 +146,52 @@ if boundary_option == 0:
     vert_weights = neighbor_cost_boykov(actual_img[down_nodes],actual_img[up_nodes])
     boundary_weights = np.concatenate((side_weights,vert_weights))
     boundary_weights = boundary_weights.reshape((boundary_weights.size)).astype(np.float32) * cost_weight
-else:
+elif boundary_option == 1:
     boundary_weights = np.zeros((v1.size,combs))
     diffs = np.abs(np.subtract(actual_img[v1],actual_img[v2]))
     for i in range(combs):
         boundary_weights[:,i] = t_link_cost(stds[i],means[i],diffs).T
-
-
     boundary_weights = boundary_weights.astype(np.float32) * cost_weight
+else:
+    lgr_bound = calculate_boundary_stats_lgr(brush_strokes,50)
+    boundary_weights = np.abs(lgr_bound.predict_log_proba(np.abs(np.subtract(actual_img[v1],actual_img[v2])))).astype(np.float32) * cost_weight
 
 
 boundary_weight_dict = {}
 for i in range(v1.shape[0]):
     boundary_weight_dict[(v1[i],v2[i])] = boundary_weights[i]
 
+filename = bound_dict[str(boundary_option)] + '_' + reg_dict[str(regional_option)] + '_stats_sample'
+f = open(filename,'w')
 
+#f.write("max boundary_weights weight for class " + str(i) + ' '+ str(np.max(boundary_weights)))
+#f.write("min boundary_weights weight for class " + str(i) +' ' + str(np.min(boundary_weights)))
+#f.write("mean boundary_weights weight for class " + str(i) +' ' + str(np.mean(boundary_weights)))
+
+
+for i in range(num_objs):
+    f.write("max boundary_weights weight for class " + str(i) + ' '+ str(np.max(boundary_weights[:,i])))
+
+for i in range(num_objs):
+    f.write("min boundary_weights weight for class " + str(i) +' ' + str(np.min(boundary_weights[:,i])))
+
+for i in range(num_objs):
+    f.write("mean boundary_weights weight for class " + str(i) +' ' + str(np.mean(boundary_weights[:,i])))
+
+for i in range(num_objs):
+    f.write("max regioinal weight for class " + str(i) + ' '+ str(np.max(regional_weights[:,i])))
+
+for i in range(num_objs):
+    f.write("min regioinal weight for class " + str(i) + ' '+str(np.min(regional_weights[:,i])))
+
+for i in range(num_objs):
+    f.write("mean regional weights weight for class " + str(i) +' ' + str(np.mean(regional_weights[:,i])))
+
+'''
 for count, (alpha,beta) in enumerate(combinations(range(num_objs),2)):
 
     alpha_beta_mask = np.logical_or(labels == alpha, labels == beta)
-    graph_indices = indices.reshape((indices.size))[alpha_beta_mask]
+    graph_indices = indices.reshape((indices.size))[alpha_beta_mask].astype(np.int32)
     graph_size = graph_indices.size
 
     node_map = np.full((actual_img.size,1),-1)
@@ -171,7 +203,7 @@ for count, (alpha,beta) in enumerate(combinations(range(num_objs),2)):
     
     e1 = np.take(node_map,v1[edge_mask]).astype(np.int32)
     e2 = np.take(node_map,v2[edge_mask]).astype(np.int32)
-    r_weights = regional_weights
+    r_weights = regional_weights.astype(np.float32)
 
     g = PyGraph(graph_size, graph_size * 4)
 
@@ -201,14 +233,17 @@ for count, (alpha,beta) in enumerate(combinations(range(num_objs),2)):
         else:
             labels[index] = beta
 
-np.savetxt('label',labels)
-black_mask = labels == 0
-grey_mask = labels == 1
-white_mask = labels == 2
+labels = labels.reshape((width,height))
 
-labels[black_mask] = 0
-labels[grey_mask] = 100
+red_mask = labels == 2
+blue_mask = labels == 1
+green_mask = labels == 0
+np.savetxt('labels', labels)
 
-labels[white_mask] = 255
+seg_im = np.zeros((width,height,3))
 
-imsave(output_file,labels.reshape((width,height)))
+seg_im[red_mask] = [255,0,0]
+seg_im[blue_mask] = [0,0,255]
+seg_im[green_mask] = [0,0,0]
+imsave(output_file,seg_im)
+'''
