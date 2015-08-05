@@ -1,7 +1,5 @@
 {
-  "training_images": [
-    "HG011/080_brush.png"
-  ],
+  "training_images": "HG011/080_brush.png",
   "training_image_index":  80,
   "case": "HG011",
   "prefix" : "4m",
@@ -9,7 +7,7 @@
   "dicomdir": "DCM",
   "groundtruthdir": "GT",
   "regional_weights": "lgr",
-  "boundary_weights": "boykov",
+  "boundary_weights": "lgr",
   "modalities": [
     "Flair",
 	  "T1",
