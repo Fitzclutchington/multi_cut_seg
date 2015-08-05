@@ -1,12 +1,14 @@
 import numpy as np
 from scipy.misc import imread, imsave, comb
+from scipy.stats import multivariate_normal
 from pymaxflow import PyGraph
 import sys
 import time
 from sklearn.linear_model import LogisticRegression
+from sklearn.mixture import GMM
 from itertools import combinations
 import math
-from utils import non_graph_weight_addition,non_graph_weight_addition_with_count, calculate_boundary_stats, calculate_boundary_stats_lgr
+from utils import non_graph_weight_addition,non_graph_weight_addition_with_count, calculate_boundary_stats, calculate_boundary_stats#lgr
 import json
 import dicom
 
@@ -27,12 +29,47 @@ def t_link_cost(std, mean, pixel):
     g[inf_mask] = .000001
     return np.abs(np.log(g))
 
+def boundary_stats_gaussian(brush_strokes,num_samples):
+    '''
+    returns mean and std of the difference between random samples from
+    brush strokes
+    '''
+    means = 0
+    cov = 0
+    
+    stat_list = []
+    num_classes = len(brush_strokes)
+    num_comb = comb(num_classes,2)
+    num_modal = brush_strokes[0].shape[1]
+    com_list = combinations(range(num_classes),2)
+    
+    for j,com in enumerate(com_list):
+        diffs = np.zeros((num_samples ** 2,num_modal))
+        class_a = brush_strokes[com[0]]
+        class_b = brush_strokes[com[1]]
+        highest_ind = class_a.shape[0] if class_a.shape[0] < class_b.shape[0] else class_b.shape[0]
+        mask = np.random.choice(highest_ind, num_comb, replace=False)
+        a_samples = brush_strokes[com[0]][mask]
+        b_samples = brush_strokes[com[1]][mask]
+
+        for i in range(num_samples):
+            start = i*num_samples
+            end = start +num_samples
+            diffs[start:end] = np.abs(np.subtract(np.roll(a_samples,i),b_samples))
+                
+        mean = np.mean(diffs,axis=0)
+        cov = np.cov(diffs,rowvar=0)
+        stat_list.append((mean,cov))
+    
+    return stat_list
+
 if len(sys.argv) < 2:
     print "usage: python abswap.py json_config"
     exit()
 
 num_objs = 2
-
+num_comb = int(comb(num_objs,2))
+print num_comb
 f = open(sys.argv[1],'r')
 task = json.load(f)
 f.close()
@@ -101,6 +138,7 @@ for img in mmdirs:
     samples0.append(current_im[blue_mask])
     samples1.append(current_im[red_mask])
 
+
 #setup array to pass to fit
 obj0samples = np.zeros((samples0[0].size,num_modalities))
 obj1samples = np.zeros((samples1[0].size,num_modalities))
@@ -109,7 +147,7 @@ for i in range(num_modalities):
     obj0samples[:,i] = samples0[i]
     obj1samples[:,i] = samples1[i]
 
-print type(samples0[0])   
+
 
 ##############################################
 #                                            #
@@ -126,13 +164,13 @@ if regional_method == 'gaussian':
         mean.append(np.mean(sample))
         std.append(np.std(sample))
    
-    regional_weights = np.zeros((actual_img.size,num_objs))
+    regional_weights = np.zeros((im_size,num_objs))
 
     for i in range(num_objs):
         regional_weights[:,i] = t_link_cost(std[i],mean[i],actual_img).T
 
 else:
-    sample_mat = np.concatenate((obj0samples,obj1samples))    
+    sample_mat = np.vstack((obj0samples,obj1samples))    
     #sample_mat = sample_mat.reshape((sample_mat.size,1))
     label_mat = np.array([0]*samples0[0].shape[0] + [1]*samples1[0].shape[0])
     
@@ -140,7 +178,7 @@ else:
     print label_mat.shape
     lgr = LogisticRegression()#solver='newton-cg')#,multi_class='multinomial')
     lgr.fit(sample_mat,label_mat)
-    regional_weights = np.abs(lgr.predict_log_proba()) 
+    regional_weights = np.abs(lgr.predict_log_proba(image_mat)) 
 
 
 ##############################################
@@ -168,21 +206,22 @@ v1 = v1.reshape((v1.size))
 v2 = np.concatenate((right_nodes, down_nodes))
 v2 = v2.reshape((v2.size))
 
-if boundary_option == 'boykov':
+if boundary_method == 'boykov':
     side_weights = neighbor_cost_boykov(actual_img[left_nodes],actual_img[right_nodes])
     vert_weights = neighbor_cost_boykov(actual_img[down_nodes],actual_img[up_nodes])
     boundary_weights = np.concatenate((side_weights,vert_weights))
     boundary_weights = boundary_weights.reshape((boundary_weights.size)).astype(np.float32) * cost_weight
 
-elif boundary_option == 'gaussian':
-    means, stds = calculate_boundary_stats(brush_strokes,100)
-    combs = int(comb(num_objs,2))
-
-    boundary_weights = np.zeros((v1.size,combs))
-    diffs = np.abs(np.subtract(actual_img[v1],actual_img[v2]))
-    for i in range(combs):
-        boundary_weights[:,i] = t_link_cost(stds[i],means[i],diffs).T
-    boundary_weights = boundary_weights.astype(np.float32) #* cost_weight
+elif boundary_method == 'gaussian':
+    g_stat = boundary_stats_gaussian(brush_strokes,100)
+    bound_list = []
+    for i in range(num_comb):
+        diff = np.abs(np.subtract(image_mat[v1],image_mat[v2]))
+        mean = g_stat[i][0]
+        cov = g_stat[i][1]
+        bound_i = multivariate_normal.logpdf(diff,mean=mean,cov=cov, allow_singular=True)
+        bound_list.append(bound_i)
+    boundary_weights = np.array(bound_list).T.astype(np.float32)
 
 else:
     lgr_bound = calculate_boundary_stats_lgr(brush_strokes,100)
@@ -209,7 +248,7 @@ while reps > 0:
         graph_size = graph_indices.size
         
         # node_map[i] is the node_id of the pixel i
-        node_map = np.full((actual_img.size),-1).astype(np.int32)
+        node_map = np.full((im_size),-1).astype(np.int32)
         # fill node map with node values
         node_map[alpha_beta_mask] = np.array(range(graph_size)).reshape((graph_size))
         
@@ -234,7 +273,7 @@ while reps > 0:
         
         
         
-        if boundary_option == 0:
+        if boundary_method == 0:
             g.add_edge_vectorized(e1,e2,boundary_weights[edge_mask],boundary_weights[edge_mask])
             non_graph_weight_addition(graph_indices,r_weights,boundary_weight_dict,labels,alpha,beta,width,height)
         else:
@@ -269,5 +308,6 @@ seg_im[blue_mask] = [0,0,0]
 seg_im[red_mask] = [255,0,0]
 #seg_im[blue_mask] = [0,0,255]
 #seg_im[green_mask] = [0,255,0]
-save_loc = outdir + '_' + regional_method + '_' + boundary_method
+save_loc = outdir + '/' + regional_method + '_' + boundary_method +'.png'
+print save_loc
 imsave(save_loc,seg_im)

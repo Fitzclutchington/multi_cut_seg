@@ -3,11 +3,11 @@
   "training_image_index":  80,
   "case": "HG011",
   "prefix" : "4m",
-  "outdir" : "seg_3b_4m",
+  "outdir" : "test",
   "dicomdir": "DCM",
   "groundtruthdir": "GT",
   "regional_weights": "lgr",
-  "boundary_weights": "lgr",
+  "boundary_weights": "gaussian",
   "modalities": [
     "Flair",
 	  "T1",
