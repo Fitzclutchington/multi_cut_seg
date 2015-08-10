@@ -1,17 +1,26 @@
 {
-  "training_images": "HG011/080_brush.png",
-  "training_image_index":  80,
+  "training_images": [
+    "HG011/DCM/GT/IMG0080.dcm",
+    "HG011/DCM/GT/IMG0100.dcm",
+    "HG011/DCM/GT/IMG0120.dcm"
+  ],
+  "training_image_indices":  [
+    80,
+    100,
+    120
+  ],
   "case": "HG011",
   "prefix" : "4m",
   "outdir" : "test",
   "dicomdir": "DCM",
   "groundtruthdir": "GT",
   "regional_weights": "lgr",
-  "boundary_weights": "gaussian",
+  "boundary_weights": "lgr",
   "modalities": [
     "Flair",
 	  "T1",
     "T1c",
     "T2"
-    ]
+    ],
+  "object_num":5
 }

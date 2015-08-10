@@ -308,6 +308,6 @@ seg_im[blue_mask] = [0,0,0]
 seg_im[red_mask] = [255,0,0]
 #seg_im[blue_mask] = [0,0,255]
 #seg_im[green_mask] = [0,255,0]
-save_loc = outdir + '/' + regional_method + '_' + boundary_method +'.png'
+save_loc = outdir + '/' + regional_method + '_' + boundary_method +'2.png'
 print save_loc
 imsave(save_loc,seg_im)
