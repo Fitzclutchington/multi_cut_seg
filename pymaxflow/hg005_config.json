@@ -1,0 +1,28 @@
+{
+  "training_images": [
+    "HG005/DCM/GT/IMG0080.dcm",
+    "HG005/DCM/GT/IMG0085.dcm",
+    "HG005/DCM/GT/IMG0090.dcm"
+    
+  ],
+  "training_image_indices":  [
+    80,
+    85,
+    90   
+   
+  ],
+  "case": "HG005",
+  "prefix" : "4m",
+  "outdir" : "test",
+  "dicomdir": "DCM",
+  "groundtruthdir": "GT",
+  "regional_weights": "lgr",
+  "boundary_weights": "lgr",
+  "modalities": [
+    "Flair",
+	  "T1",
+    "T1c",
+    "T2"
+    ],
+  "object_num":5
+}

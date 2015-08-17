@@ -1,11 +1,11 @@
 {
   "training_images": [
-    "HG011/DCM/GT/IMG0080.dcm",
+    "HG011/DCM/GT/IMG0090.dcm",
     "HG011/DCM/GT/IMG0100.dcm",
     "HG011/DCM/GT/IMG0120.dcm"
   ],
   "training_image_indices":  [
-    80,
+    90,
     100,
     120
   ],

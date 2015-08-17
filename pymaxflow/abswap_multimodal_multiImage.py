@@ -48,7 +48,13 @@ def boundary_stats_gaussian(brush_strokes,num_samples):
         diffs = np.zeros((num_samples ** 2,num_modal))
         class_a = brush_strokes[com[0]]
         class_b = brush_strokes[com[1]]
-        highest_ind = class_a.shape[0] if class_a.shape[0] < class_b.shape[0] else class_b.shape[0]
+        if class_a.shape[0] < num_samples:
+            highest_ind = class_a.shape[0]
+        elif class_b.shape[0] < num_samples:
+            highest_ind = class_b.shape[0]
+        else:
+            highest_ind = class_a.shape[0] if class_a.shape[0] < class_b.shape[0] else class_b.shape[0]
+        print highest_ind
         mask = np.random.choice(highest_ind, num_samples, replace=False)
         a_samples = brush_strokes[com[0]][mask]
         b_samples = brush_strokes[com[1]][mask]
@@ -74,25 +80,32 @@ def calculate_boundary_stats_lgr(brush_strokes,num_samples):
     num_modal = brush_strokes[0].shape[1]
     com_list = combinations(range(len(brush_strokes)),2)
     num_comb = comb(num_classes,2)
-    sample_mat = np.zeros((num_comb * num_samples**2,num_modal))
-    labels_mat = np.zeros((num_comb * num_samples**2))
+    sample_mat = []
+    labels_mat = []
     for j,com in enumerate(com_list):
-        diffs = np.zeros((num_samples ** 2,num_modal))
+        diffs = []
         class_a = brush_strokes[com[0]]
         class_b = brush_strokes[com[1]]
-        highest_ind = class_a.shape[0] if class_a.shape[0] < class_b.shape[0] else class_b.shape[0]
-        mask = np.random.choice(highest_ind, num_samples, replace=False)
+        if class_a.shape[0] < num_samples:
+            highest_ind = class_a.shape[0]
+            num_samples = class_a.shape[0]
+            mask = np.random.choice(highest_ind, highest_ind, replace=False)
+        elif class_b.shape[0] < num_samples:
+            highest_ind = class_b.shape[0]
+            num_samples = class_b.shape[0]
+            mask = np.random.choice(highest_ind, highest_ind, replace=False)
+        else:
+            highest_ind = class_a.shape[0] if class_a.shape[0] < class_b.shape[0] else class_b.shape[0]
+            mask = np.random.choice(highest_ind, num_samples, replace=False)
+        
         a_samples = brush_strokes[com[0]][mask]
         b_samples = brush_strokes[com[1]][mask]
         for i in range(num_samples):
-            start = i*num_samples
-            end = start +num_samples
-            diffs[start:end] = np.abs(np.subtract(np.roll(a_samples,i),b_samples))  
-        start = j*num_samples**2
-        end = start + num_samples**2
-        sample_mat[start:end] = diffs
-        labels_mat[start:end] = j
-    
+            diffs.append(np.abs(np.subtract(np.roll(a_samples,i),b_samples)))  
+        samps = np.vstack(diffs)
+        sample_mat.append(samps)
+        labels_mat.extend([j]*samps.shape[0])
+    sample_mat = np.vstack(sample_mat)
     lgr = LogisticRegression()
     lgr.fit(sample_mat,labels_mat)
     return lgr
@@ -145,22 +158,21 @@ for i in object_list:
         i.append([])
 
 for i,img in enumerate(training_images):
-
     brush_img = dicom.read_file(img)
     width = brush_img.Columns
     height = brush_img.Rows
     im_size = width*height
     brush_img = brush_img.pixel_array
-
     #masks for samples and intial labeling    
     mask0 = brush_img == 0
     mask1 = brush_img == 1
     mask2 = brush_img == 2
     mask3 = brush_img == 3
     mask4 = brush_img == 4
-
+    
     mask_list = [mask0,mask1,mask2,mask3,mask4]
 
+    
     train_index = training_image_indices[i] - 1
     actual_imgs = mmimgs[train_index]
     
@@ -172,7 +184,6 @@ for i,img in enumerate(training_images):
 
 
 samples = [np.array(obj).T for obj in object_list]
-
 
 
 ##############################################
@@ -212,7 +223,12 @@ if boundary_method =='gaussian':
     g_stat = boundary_stats_gaussian(samples,100)
 
 else:
-    lgr_bound = calculate_boundary_stats_lgr(samples,100)
+    print samples[0].shape
+    print samples[1].shape
+    print samples[2].shape
+    print samples[3].shape
+    print samples[4].shape
+    lgr_bound = calculate_boundary_stats_lgr(samples,50)
 
 # get adjacent edges
 # right edges = (left_node[i],right_node[i])
@@ -299,7 +315,7 @@ for im_num,im_slice in enumerate(mmimgs):
     # Graph Construction          #
     #                             #
     ###############################
-    reps = 2
+    reps = 3
     while reps > 0:
         reps -= 1
         for count, (alpha,beta) in enumerate(combinations(range(num_objs),2)):
@@ -357,7 +373,7 @@ for im_num,im_slice in enumerate(mmimgs):
                 else:
                     labels[index] = beta
 
-    labels = labels.reshape((width,height))
+    labels = labels.reshape((height,width))
     black_mask = labels == 0
     red_mask = labels == 1
     blue_mask = labels == 2
@@ -365,7 +381,7 @@ for im_num,im_slice in enumerate(mmimgs):
     purp_mask = labels == 4
     np.savetxt('labels', labels)
 
-    seg_im = np.zeros((width,height,3))
+    seg_im = np.zeros((height,width,3))
     seg_im[blue_mask] = [0,0,0]
     seg_im[red_mask] = [255,0,0]
     seg_im[blue_mask] = [0,0,255]
