@@ -161,33 +161,7 @@ boundary_weight_dict = {}
 for i in range(v1.shape[0]):
     boundary_weight_dict[(v1[i],v2[i])] = boundary_weights[i]
 
-filename = bound_dict[str(boundary_option)] + '_' + reg_dict[str(regional_option)] + '_stats_sample'
-f = open(filename,'w')
 
-#f.write("max boundary_weights weight for class " + str(i) + ' '+ str(np.max(boundary_weights)))
-#f.write("min boundary_weights weight for class " + str(i) +' ' + str(np.min(boundary_weights)))
-#f.write("mean boundary_weights weight for class " + str(i) +' ' + str(np.mean(boundary_weights)))
-
-
-for i in range(num_objs):
-    f.write("max boundary_weights weight for class " + str(i) + ' '+ str(np.max(boundary_weights[:,i])))
-
-for i in range(num_objs):
-    f.write("min boundary_weights weight for class " + str(i) +' ' + str(np.min(boundary_weights[:,i])))
-
-for i in range(num_objs):
-    f.write("mean boundary_weights weight for class " + str(i) +' ' + str(np.mean(boundary_weights[:,i])))
-
-for i in range(num_objs):
-    f.write("max regioinal weight for class " + str(i) + ' '+ str(np.max(regional_weights[:,i])))
-
-for i in range(num_objs):
-    f.write("min regioinal weight for class " + str(i) + ' '+str(np.min(regional_weights[:,i])))
-
-for i in range(num_objs):
-    f.write("mean regional weights weight for class " + str(i) +' ' + str(np.mean(regional_weights[:,i])))
-
-'''
 for count, (alpha,beta) in enumerate(combinations(range(num_objs),2)):
 
     alpha_beta_mask = np.logical_or(labels == alpha, labels == beta)
@@ -218,7 +192,7 @@ for count, (alpha,beta) in enumerate(combinations(range(num_objs),2)):
     
     # this needs speed up
 
-    g.add_tweights_vectorized(np.array(range(graph_size)).astype(np.int32),r_weights[:,alpha][alpha_beta_mask].astype(np.float32),r_weights[:,beta][alpha_beta_mask].astype(np.float32))
+    g.add_tweights_vectorized(np.arange(graph_size).astype(np.int32),r_weights[:,alpha][alpha_beta_mask].astype(np.float32),r_weights[:,beta][alpha_beta_mask].astype(np.float32))
 
     
     g.maxflow()
@@ -246,4 +220,3 @@ seg_im[red_mask] = [255,0,0]
 seg_im[blue_mask] = [0,0,255]
 seg_im[green_mask] = [0,0,0]
 imsave(output_file,seg_im)
-'''

@@ -35,8 +35,7 @@ def boundary_stats_gaussian(brush_strokes,num_samples):
     returns mean and std of the difference between random samples from
     brush strokes
     '''
-    means = 0
-    cov = 0
+    
     
     stat_list = []
     num_classes = len(brush_strokes)
@@ -50,12 +49,15 @@ def boundary_stats_gaussian(brush_strokes,num_samples):
         class_b = brush_strokes[com[1]]
         if class_a.shape[0] < num_samples:
             highest_ind = class_a.shape[0]
+            num_samples = class_a.shape[0]
+            mask = np.random.choice(highest_ind, highest_ind, replace=False)
         elif class_b.shape[0] < num_samples:
             highest_ind = class_b.shape[0]
+            num_samples = class_b.shape[0]
+            mask = np.random.choice(highest_ind, highest_ind, replace=False)
         else:
             highest_ind = class_a.shape[0] if class_a.shape[0] < class_b.shape[0] else class_b.shape[0]
-        print highest_ind
-        mask = np.random.choice(highest_ind, num_samples, replace=False)
+            mask = np.random.choice(highest_ind, num_samples, replace=False)
         a_samples = brush_strokes[com[0]][mask]
         b_samples = brush_strokes[com[1]][mask]
 
@@ -164,13 +166,9 @@ for i,img in enumerate(training_images):
     im_size = width*height
     brush_img = brush_img.pixel_array
     #masks for samples and intial labeling    
-    mask0 = brush_img == 0
-    mask1 = brush_img == 1
-    mask2 = brush_img == 2
-    mask3 = brush_img == 3
-    mask4 = brush_img == 4
+
     
-    mask_list = [mask0,mask1,mask2,mask3,mask4]
+    mask_list = [brush_img== num for num in range(num_objs)]
 
     
     train_index = training_image_indices[i] - 1
@@ -223,11 +221,7 @@ if boundary_method =='gaussian':
     g_stat = boundary_stats_gaussian(samples,100)
 
 else:
-    print samples[0].shape
-    print samples[1].shape
-    print samples[2].shape
-    print samples[3].shape
-    print samples[4].shape
+    
     lgr_bound = calculate_boundary_stats_lgr(samples,50)
 
 # get adjacent edges

@@ -27,8 +27,28 @@ def t_link_cost(std, mean, pixel):
     g[inf_mask] = .000001
     return np.abs(np.log(g))
 
+def insert_hard_constraints(regional_weights,masks):
+    '''
+    regional weights are a M x N matrix where M is the number of pixels and N
+    is the number of classes
+
+    masks is a N x M boolean list where N is the number of classes and M is 
+    the number of pixels
+
+    The function places the value 10000 at brush stroke indices and 0 for
+    all other class values at that index
+    '''
+    num_classes = len(masks)
+    for i in range(num_classes):
+        for j,mask in enumerate(masks):
+            if i == j:
+                regional_weights[:,i][mask] = 0
+            else:
+                regional_weights[:,i][mask] = 10000
+
+
 if len(sys.argv) < 4:
-    print "usage: python abswap.py image brush output alpha"
+    print "usage: python abswap.py image brush output weight bound(0,1,2) reg(0,1)"
     exit()
 
 bound_dict = {'0':'boykov',
@@ -89,6 +109,7 @@ labels[red_mask] = 1
 labels[blue_mask] = 2
 labels[green_mask] = 3
 
+stroke_mask = [yellow_mask,red_mask,blue_mask,green_mask]
 #order matters so that initial labeling and probabilities are correct
 obj0samples = actual_img[yellow_mask]
 obj1samples = actual_img[red_mask]
@@ -129,7 +150,10 @@ else:
     lgr.fit(sample_mat,label_mat)
 
     t1 = time.time()
-    regional_weights = np.abs(lgr.predict_log_proba(actual_img)) 
+    regional_weights = np.abs(lgr.predict_log_proba(actual_img))
+    
+
+insert_hard_constraints(regional_weights,stroke_mask)
 
 mins = np.argmin(regional_weights,axis=1)
 mins = mins.reshape((width,height))
@@ -143,21 +167,13 @@ seg_im[yellow_mask] = [0,0,0]
 seg_im[red_mask] = [255,0,0]
 seg_im[blue_mask] = [0,0,255]
 seg_im[green_mask] = [0,255,0]
-print mins.shape
-print width*height
+
 imsave('mins.png',seg_im)
 imsave('class0.png',regional_weights[:,0].reshape((width,height)))
 imsave('class1.png',regional_weights[:,1].reshape((width,height)))
 imsave('class2.png',regional_weights[:,2].reshape((width,height)))
 imsave('class3.png',regional_weights[:,3].reshape((width,height)))
-for i in range(num_objs):
-   print "max regioinal weight for class " + str(i) + ' '+ str(np.max(regional_weights[:,i]))
 
-for i in range(num_objs):
-   print "min regioinal weight for class " + str(i) + ' '+str(np.min(regional_weights[:,i]))
-
-for i in range(num_objs):
-   print "mean regional weights weight for class " + str(i) +' ' + str(np.mean(regional_weights[:,i]))
 ##############################################
 #                                            #
 #  Set up boundary weights                   #
@@ -196,16 +212,6 @@ else:
     lgr_bound = calculate_boundary_stats_lgr(brush_strokes,100)
     boundary_weights = np.abs(lgr_bound.predict_log_proba(np.abs(np.subtract(actual_img[v1],actual_img[v2])))).astype(np.float32) * cost_weight
 
-'''
-for i in range(num_objs):
-   print "max boundary_weights weight for class " + str(i) + ' '+ str(np.max(boundary_weights[:,i]))
-
-for i in range(num_objs):
-   print "min boundary_weights weight for class " + str(i) +' ' + str(np.min(boundary_weights[:,i]))
-
-for i in range(num_objs):
-   print "mean boundary_weights weight for class " + str(i) +' ' + str(np.mean(boundary_weights[:,i]))
-''' 
 # Dictionary used to add to terminal edges
 boundary_weight_dict = {}
 for i in range(v1.shape[0]):
@@ -213,30 +219,6 @@ for i in range(v1.shape[0]):
 
 filename = bound_dict[str(boundary_option)] + '_' + reg_dict[str(regional_option)] + '_stats'
 f = open(filename,'w')
-
-#f.write("max boundary_weights weight for class " + str(i) + ' '+ str(np.max(boundary_weights)))
-#f.write("min boundary_weights weight for class " + str(i) +' ' + str(np.min(boundary_weights)))
-#f.write("mean boundary_weights weight for class " + str(i) +' ' + str(np.mean(boundary_weights)))
-
-
-for i in range(num_objs):
-    f.write("max boundary_weights weight for class " + str(i) + ' '+ str(np.max(boundary_weights[:,i])))
-
-for i in range(num_objs):
-    f.write("min boundary_weights weight for class " + str(i) +' ' + str(np.min(boundary_weights[:,i])))
-
-for i in range(num_objs):
-    f.write("mean boundary_weights weight for class " + str(i) +' ' + str(np.mean(boundary_weights[:,i])))
-
-for i in range(num_objs):
-    f.write("max regioinal weight for class " + str(i) + ' '+ str(np.max(regional_weights[:,i])))
-
-for i in range(num_objs):
-    f.write("min regioinal weight for class " + str(i) + ' '+str(np.min(regional_weights[:,i])))
-
-for i in range(num_objs):
-    f.write("mean regional weights weight for class " + str(i) +' ' + str(np.mean(regional_weights[:,i])))
-
 
 
 ###############################

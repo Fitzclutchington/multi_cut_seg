@@ -48,7 +48,7 @@ for i,ims in enumerate(zip(GT_files,seg_files)):
             intersection = np.logical_and(seg_mask,gt_mask)
 
             dice = 2. * intersection.sum() /(seg_mask.sum() + gt_mask.sum())
-            f.write('slice ' + str(i) + ' has dice coeffecient ' + str(dice) +'\n')
+            f.write(ims[1] + ' has dice coeffecient ' + str(dice) +'\n')
     else:
         if gt_mask.sum() > 0:
             class1_mask = gt_img == 1
