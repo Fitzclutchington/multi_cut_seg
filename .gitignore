@@ -4,3 +4,5 @@ test*
 *.pyc
 pymaxflow/H0G011/
 pymaxflow/images/
+pymaxflow/liver_dir
+pymaxflow/*.json

@@ -68,6 +68,9 @@ def boundary_stats_gaussian(brush_strokes,num_samples):
                 
         mean = np.mean(diffs,axis=0)
         cov = np.cov(diffs,rowvar=0)
+        print "mean and covariance shape"
+        print mean.shape
+        print cov.shape
         stat_list.append((mean,cov))
     
     return stat_list
@@ -137,11 +140,18 @@ num_modalities = len(dirs)
 
 mmdirs = []
 
-for d in dirs:
-    fil = d + '/*.dcm'
-    lis = glob.glob(fil)
-    lis.sort()
-    mmdirs.append(lis)
+if img_type == "dcm":
+    for d in dirs:
+        fil = d + '/*.dcm'
+        lis = glob.glob(fil)
+        lis.sort()
+        mmdirs.append(lis)
+else:
+    for d in dirs:
+        fil = d + '/*.bmp'
+        lis = glob.glob(fil)
+        lis.sort()
+        mmdirs.append(lis)
 
 
 mmimgs= []
@@ -160,11 +170,14 @@ for i in object_list:
         i.append([])
 
 for i,img in enumerate(training_images):
-    brush_img = dicom.read_file(img)
+    if img_type == "dcm":
+        brush_img = dicom.read_file(img)
+        brush_img = brush_img.pixel_array
+    else:
+        brush_img = imread(img)
     width = brush_img.Columns
     height = brush_img.Rows
     im_size = width*height
-    brush_img = brush_img.pixel_array
     #masks for samples and intial labeling    
 
     
