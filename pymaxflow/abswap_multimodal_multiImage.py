@@ -13,6 +13,21 @@ import json
 import dicom
 import glob
 
+def mask_list_bmp(brush_img):
+    print brush_img.shape
+    red_band = brush_img[:,0]
+    green_band = brush_img[:,1]
+    blue_band = brush_img[:,2]
+
+    red_mask = np.logical_and(red_band == 255, green_band == 0)
+    blue_mask = np.logical_and(blue_band == 255,green_band == 0)
+    green_mask = np.logical_and(green_band == 255,red_band == 0)
+    yellow_mask_1 = np.logical_and(red_band == 255,green_band == 255)
+    yellow_mask = np.logical_and(yellow_mask_1,blue_band==0)
+    
+    print red_mask.shape
+    return [yellow_mask, red_mask, blue_mask, green_mask]
+
 def neighbor_cost_boykov(p1, p2, alpha=100):
     pdiff = np.subtract(p1,p2)
     e_term = np.negative((np.multiply(pdiff,pdiff)))/(2 * alpha * alpha)
@@ -133,11 +148,12 @@ outdir =  case + '/' + task['outdir']
 dicomdir = task['dicomdir']
 regional_method = task['regional_weights']
 boundary_method = task['boundary_weights']
-
+img_type = task['img_type']
 num_comb = int(comb(num_objs,2))
 dirs = [case +"/"+dicomdir+"/" + m for m in modalities]
 num_modalities = len(dirs)
 
+print dirs
 mmdirs = []
 
 if img_type == "dcm":
@@ -169,27 +185,39 @@ for i in object_list:
     for j in range(num_modalities):
         i.append([])
 
+
 for i,img in enumerate(training_images):
     if img_type == "dcm":
         brush_img = dicom.read_file(img)
         brush_img = brush_img.pixel_array
+        width = brush_img.Columns
+        height = brush_img.Rows
     else:
         brush_img = imread(img)
-    width = brush_img.Columns
-    height = brush_img.Rows
+        width = brush_img.shape[0]
+        height = brush_img.shape[1]
     im_size = width*height
+    brush_img = brush_img.reshape((im_size,3))
     #masks for samples and intial labeling    
 
+    if img_type == "dcm":
+        mask_list = [brush_img== num for num in range(num_objs)]
+    else:
+        mask_list = mask_list_bmp(brush_img)
     
-    mask_list = [brush_img== num for num in range(num_objs)]
-
-    
+    #print mask_list[0]
     train_index = training_image_indices[i] - 1
     actual_imgs = mmimgs[train_index]
     
     
     for k,img in enumerate(actual_imgs):
-        current_im = dicom.read_file(str(img)).pixel_array.reshape((im_size))
+        if img_type == "dcm":
+            current_im = dicom.read_file(str(img)).pixel_array
+        else:
+            # True designates that we want a gray scale image
+            current_im = imread(str(img),True)
+            print current_im.shape
+        current_im = current_im.reshape((im_size))
         for obj_num,obj in enumerate(object_list):
             obj[k].extend(current_im[mask_list[obj_num].reshape((im_size))])
 
@@ -232,7 +260,6 @@ indices = np.arange(im_size).reshape((height,width)).astype(np.int32)
 
 if boundary_method =='gaussian':
     g_stat = boundary_stats_gaussian(samples,100)
-
 else:
     
     lgr_bound = calculate_boundary_stats_lgr(samples,50)
@@ -267,7 +294,10 @@ for im_num,im_slice in enumerate(mmimgs):
 
     image_mat = np.zeros((im_size,num_modalities))
     for i,img in enumerate(im_slice):
-        image_mat[:,i] = dicom.read_file(str(img)).pixel_array.reshape((im_size))
+        if img_type =="dcm":
+            image_mat[:,i] = dicom.read_file(str(img)).pixel_array.reshape((im_size))
+        else:
+            image_mat[:,i] = imread(str(img),True).reshape((im_size))
     
     ##############################################
     #                                            #
@@ -292,10 +322,10 @@ for im_num,im_slice in enumerate(mmimgs):
 
 
     if boundary_method == 'boykov':
-        side_weights = neighbor_cost_boykov(actual_img[left_nodes],actual_img[right_nodes])
-        vert_weights = neighbor_cost_boykov(actual_img[down_nodes],actual_img[up_nodes])
+        side_weights = neighbor_cost_boykov(image_mat[left_nodes],image_mat[right_nodes])
+        vert_weights = neighbor_cost_boykov(image_mat[down_nodes],image_mat[up_nodes])
         boundary_weights = np.concatenate((side_weights,vert_weights))
-        boundary_weights = boundary_weights.reshape((boundary_weights.size)).astype(np.float32) * cost_weight
+        boundary_weights = boundary_weights.reshape((boundary_weights.size)).astype(np.float32) 
 
     elif boundary_method == 'gaussian':
         bound_list = []
