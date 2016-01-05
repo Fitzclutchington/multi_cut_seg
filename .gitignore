@@ -2,7 +2,7 @@
 *.bmp
 test*
 *.pyc
-pymaxflow/H0G011/
+pymaxflow/HG*
 pymaxflow/images/
 pymaxflow/liver_dir
 pymaxflow/*.json
