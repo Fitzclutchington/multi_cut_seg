@@ -14,7 +14,7 @@ import dicom
 import glob
 
 def mask_list_bmp(brush_img):
-    print brush_img.shape
+   
     red_band = brush_img[:,0]
     green_band = brush_img[:,1]
     blue_band = brush_img[:,2]
@@ -25,7 +25,6 @@ def mask_list_bmp(brush_img):
     yellow_mask_1 = np.logical_and(red_band == 255,green_band == 255)
     yellow_mask = np.logical_and(yellow_mask_1,blue_band==0)
     
-    print red_mask.shape
     return [yellow_mask, red_mask, blue_mask, green_mask]
 
 def neighbor_cost_boykov(p1, p2, alpha=100):
@@ -83,9 +82,6 @@ def boundary_stats_gaussian(brush_strokes,num_samples):
                 
         mean = np.mean(diffs,axis=0)
         cov = np.cov(diffs,rowvar=0)
-        print "mean and covariance shape"
-        print mean.shape
-        print cov.shape
         stat_list.append((mean,cov))
     
     return stat_list
@@ -153,7 +149,6 @@ num_comb = int(comb(num_objs,2))
 dirs = [case +"/"+dicomdir+"/" + m for m in modalities]
 num_modalities = len(dirs)
 
-print dirs
 mmdirs = []
 
 if img_type == "dcm":
@@ -216,7 +211,6 @@ for i,img in enumerate(training_images):
         else:
             # True designates that we want a gray scale image
             current_im = imread(str(img),True)
-            print current_im.shape
         current_im = current_im.reshape((im_size))
         for obj_num,obj in enumerate(object_list):
             obj[k].extend(current_im[mask_list[obj_num].reshape((im_size))])
@@ -323,7 +317,7 @@ for im_num,im_slice in enumerate(mmimgs):
 
     if boundary_method == 'boykov':
         side_weights = neighbor_cost_boykov(image_mat[left_nodes],image_mat[right_nodes])
-        vert_weights = neighbor_cost_boykov(image_mat[down_nodes],image_mat[up_nodes])
+        vert_weights = neighbor_cost_boykov(image_mat[down_nodes],[up_nodes])
         boundary_weights = np.concatenate((side_weights,vert_weights))
         boundary_weights = boundary_weights.reshape((boundary_weights.size)).astype(np.float32) 
 
@@ -340,7 +334,7 @@ for im_num,im_slice in enumerate(mmimgs):
     else:
         diff = np.abs(np.subtract(image_mat[v1],image_mat[v2]))
         boundary_weights = np.abs(lgr_bound.predict_log_proba(diff)).astype(np.float32)
-    
+    print regional_weights.shape
    
     # Dictionary used to add to terminal edges
     boundary_weight_dict = {}

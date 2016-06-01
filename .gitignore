@@ -6,3 +6,4 @@ pymaxflow/HG*
 pymaxflow/images/
 pymaxflow/liver_dir
 pymaxflow/*.json
+pymaxflow/dcm/
