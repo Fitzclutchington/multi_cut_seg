@@ -1,0 +1,101 @@
+\documentclass[twocolumn,nofootinbib,%
+notitlepage,11pt]{report}
+
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\begin{document}
+
+\title{Implementing the BLAST Protocol}
+\author{Cody Boppert}
+
+\maketitle
+
+\begin{abstract}
+In this paper we discuss creating a streaming video service with the NETBLAST Protocol. This protocol employs udp and datagrams to send video streams with very little overhead. This paper will introduce the main goals of the projects, talk about the technologies used, glance at the design process, and finally detail the construction, testing, deployment, and hurdles.
+\end{abstract}
+
+\section*{Introduction}
+This project hopes to achieve the following goals 
+
+\begin{enumerate}
+\item Employ UDP to send datagrams between two computers
+\item Implement a packet layer on top of socket layer
+\item Implement a packet garbler to randomly drop or delay packets
+\item Using a trace file from the Jurassic Park movie test the blast protocol based upon the values of the trace file.
+\item Generate a delay distribution of packets arriving at the receiver
+\item Transmit a video through the protocol and render it at the receiver.
+\end{enumerate}
+
+This project will employ Java 8 and will be run on a MacBook Pro\cite{mbp} and an older MacBook\cite{mb}.
+
+\subsection*{UDP}
+User Datagram Protocol is a transmission protocol which offers no guarantees in regards to delivery or order often used for streaming videos and other packet heavy transmissions where order and reliability are not necessarily important.\cite{udp} In our project we will be employing the DatagramPacket and DatagramSocket classes provided in the java.net library. 
+
+\subsection*{BLAST Protocol}
+A simple protocol designed for rapid (2-3 mbps) transmission with minimal overhead. The name is derived from it's attempt to transmit at 'full blast'. At predetermined intervals the protocol sends a blast of packets. A response from the client indicates which packets were dropped along the way which are then sent in similar blasts.\cite{professor}
+
+\section*{Laying out the software}
+\subsection*{Server Side}
+In our project the server will send either the test packets from the Jurassic Park movie or the actual datagrams associated with the video. Here we examine the components which make up the server side.
+\subsubsection*{Socket Layer}
+This is the most basic level of the application. This is the layer which actually sends the datagrams out. We will implement layers above this to perform a variety of functions including garbling. The socket layer, in our application, is called the emitter. It requires a destination and is a network element. A network element, in our application, is defined as a component which accepts and emits packet. In this case the emit function at the socket layer sends packets to the client.
+\subsubsection*{Garbler}
+The garbler sits above the socket layer. The garbler's function is to delay and drop packets at random. This recreates more realistic network conditions.
+\subsubsection*{Blast Protocol}
+Implementing the BLAST Protocol is the goal of the project. This protocol offers to transmit large amounts of data at high speeds with little overhead. 
+\subsubsection*{Input}
+Our input will consist of two different sets of data. Our first set of data comes from the trace file created with the Hollywood Hit "Jurassic Park". This
+
+\subsection*{Client Side}
+
+\subsection*{Client Side}
+
+\section*{Creating the Socket Connection}
+
+\section*{Implementing the Packet Layer}
+
+\section*{Adding in the Garbler}
+
+\section*{Feeding in the Trace File}
+
+\section*{Generating a Delay Distribution}
+
+\section*{Transmitting a Video}
+
+\section*{Conclusion}
+
+\begin{thebibliography}{30}
+
+\bibitem{professor}
+Professor Ravindran
+City College of New York
+I4722 - High Performance Networks
+Spring 2014
+
+\bibitem{udp}
+J. Postel\\
+\textbf{User Datagram Protocal}\\
+RFC768\\
+\url{http://tools.ietf.org/html/rfc768}
+
+\bibitem{docs}
+Oracle Docs\\
+\textbf{Class DatagramSocket}\\
+\url{http://docs.oracle.com/javase/8/docs/api/java/net/DatagramSocket.html}
+
+\bibitem{mbp}
+MacBook Pro\\
+OS 10.9.3\\
+2.6 GHz Intel Core i7\\
+16 GB 1600 MHz DDR3\\
+512 GB SSD
+
+\bibitem{mb}
+MacBook
+4 GB 800 MHz DDR2
+
+\end{thebibliography}
+\end{document}

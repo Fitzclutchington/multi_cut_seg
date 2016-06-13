@@ -131,7 +131,8 @@ if len(sys.argv) < 2:
     print "usage: python abswap.py json_config"
     exit()
 
-f = open(sys.argv[1],'r')
+filename = sys.argv[1]
+f = open(filename,'r')
 task = json.load(f)
 f.close()
 
@@ -139,12 +140,14 @@ num_objs = task['object_num']
 training_images = [p for p in task['training_images']]
 modalities = [m for m in task['modalities']]
 training_image_indices = [m for m in task['training_image_indices']]
-case = task['case']
-outdir =  case + '/' + task['outdir']
-dicomdir = task['dicomdir']
-regional_method = task['regional_weights']
-boundary_method = task['boundary_weights']
-img_type = task['img_type']
+case = str(task['case'])
+outdir =  case + '/' + str(task['outdir'])
+dicomdir = str(task['dicomdir'])
+regional_method = str(task['regional_weights'])
+boundary_method = str(task['boundary_weights'])
+if boundary_method == "none":
+    boundary_method = None
+img_type = str(task['img_type'])
 num_comb = int(comb(num_objs,2))
 dirs = [case +"/"+dicomdir+"/" + m for m in modalities]
 num_modalities = len(dirs)
@@ -185,14 +188,16 @@ for i,img in enumerate(training_images):
     if img_type == "dcm":
         brush_img = dicom.read_file(img)
         brush_img = brush_img.pixel_array
-        width = brush_img.Columns
-        height = brush_img.Rows
+        width = brush_img.shape[0]
+        height = brush_img.shape[1]
+        im_size = width*height
+        brush_img = brush_img.reshape(im_size)
     else:
         brush_img = imread(img)
         width = brush_img.shape[0]
         height = brush_img.shape[1]
-    im_size = width*height
-    brush_img = brush_img.reshape((im_size,3))
+        im_size = width*height
+        brush_img = brush_img.reshape((im_size,3))
     #masks for samples and intial labeling    
 
     if img_type == "dcm":
@@ -251,12 +256,12 @@ else:
 ##############################################
 indices = np.arange(im_size).reshape((height,width)).astype(np.int32)
 
+if boundary_method:
+    if boundary_method =='gaussian':
+        g_stat = boundary_stats_gaussian(samples,100)
+    elif boundary_method == 'lgr':
+        lgr_bound = calculate_boundary_stats_lgr(samples,50)
 
-if boundary_method =='gaussian':
-    g_stat = boundary_stats_gaussian(samples,100)
-else:
-    
-    lgr_bound = calculate_boundary_stats_lgr(samples,50)
 
 # get adjacent edges
 # right edges = (left_node[i],right_node[i])
@@ -314,32 +319,32 @@ for im_num,im_slice in enumerate(mmimgs):
     #                                            #
     ##############################################
 
+    if boundary_method:
+        if boundary_method == 'boykov':
+            side_weights = neighbor_cost_boykov(image_mat[left_nodes],image_mat[right_nodes])
+            vert_weights = neighbor_cost_boykov(image_mat[down_nodes],[up_nodes])
+            boundary_weights = np.concatenate((side_weights,vert_weights))
+            boundary_weights = boundary_weights.reshape((boundary_weights.size)).astype(np.float32) 
 
-    if boundary_method == 'boykov':
-        side_weights = neighbor_cost_boykov(image_mat[left_nodes],image_mat[right_nodes])
-        vert_weights = neighbor_cost_boykov(image_mat[down_nodes],[up_nodes])
-        boundary_weights = np.concatenate((side_weights,vert_weights))
-        boundary_weights = boundary_weights.reshape((boundary_weights.size)).astype(np.float32) 
+        elif boundary_method == 'gaussian':
+            bound_list = []
+            for i in range(num_comb):
+                diff = np.abs(np.subtract(image_mat[v1],image_mat[v2]))
+                mean = g_stat[i][0]
+                cov = g_stat[i][1]
+                bound_i = multivariate_normal.logpdf(diff,mean=mean,cov=cov, allow_singular=True)
+                bound_list.append(bound_i)
+            boundary_weights = np.array(bound_list).T.astype(np.float32)
 
-    elif boundary_method == 'gaussian':
-        bound_list = []
-        for i in range(num_comb):
+        else:
             diff = np.abs(np.subtract(image_mat[v1],image_mat[v2]))
-            mean = g_stat[i][0]
-            cov = g_stat[i][1]
-            bound_i = multivariate_normal.logpdf(diff,mean=mean,cov=cov, allow_singular=True)
-            bound_list.append(bound_i)
-        boundary_weights = np.array(bound_list).T.astype(np.float32)
-
-    else:
-        diff = np.abs(np.subtract(image_mat[v1],image_mat[v2]))
-        boundary_weights = np.abs(lgr_bound.predict_log_proba(diff)).astype(np.float32)
-    print regional_weights.shape
-   
-    # Dictionary used to add to terminal edges
-    boundary_weight_dict = {}
-    for i in range(v1.shape[0]):
-        boundary_weight_dict[(v1[i],v2[i])] = boundary_weights[i]
+            boundary_weights = np.abs(lgr_bound.predict_log_proba(diff)).astype(np.float32)
+        print regional_weights.shape
+       
+        # Dictionary used to add to terminal edges
+        boundary_weight_dict = {}
+        for i in range(v1.shape[0]):
+            boundary_weight_dict[(v1[i],v2[i])] = boundary_weights[i]
    
     ###############################
     #                             #
@@ -380,13 +385,13 @@ for im_num,im_slice in enumerate(mmimgs):
             g.add_node(graph_size)
             
             
-           
-            if boundary_method == 'boykov':
-                g.add_edge_vectorized(e1,e2,boundary_weights[edge_mask],boundary_weights[edge_mask])
-                non_graph_weight_addition(graph_indices,r_weights,boundary_weight_dict,labels,alpha,beta,width,height)
-            else:
-                g.add_edge_vectorized(e1,e2,boundary_weights[:,count][edge_mask],boundary_weights[:,count][edge_mask])
-                non_graph_weight_addition_with_count(graph_indices,r_weights,boundary_weight_dict,labels,alpha,beta,width,height,count)
+            if boundary_method:
+                if boundary_method == 'boykov':
+                    g.add_edge_vectorized(e1,e2,boundary_weights[edge_mask],boundary_weights[edge_mask])
+                    non_graph_weight_addition(graph_indices,r_weights,boundary_weight_dict,labels,alpha,beta,width,height)
+                else:
+                    g.add_edge_vectorized(e1,e2,boundary_weights[:,count][edge_mask],boundary_weights[:,count][edge_mask])
+                    non_graph_weight_addition_with_count(graph_indices,r_weights,boundary_weight_dict,labels,alpha,beta,width,height,count)
             
             
             g.add_tweights_vectorized(np.array(range(graph_size)).astype(np.int32),r_weights[:,alpha][alpha_beta_mask],r_weights[:,beta][alpha_beta_mask])
@@ -404,7 +409,7 @@ for im_num,im_slice in enumerate(mmimgs):
                 else:
                     labels[index] = beta
 
-    labels = labels.reshape((height,width))
+    labels = labels.reshape((width,height))
     black_mask = labels == 0
     red_mask = labels == 1
     blue_mask = labels == 2
@@ -412,12 +417,15 @@ for im_num,im_slice in enumerate(mmimgs):
     purp_mask = labels == 4
     np.savetxt('labels', labels)
 
-    seg_im = np.zeros((height,width,3))
+    seg_im = np.zeros((width,height,3))
     seg_im[blue_mask] = [0,0,0]
     seg_im[red_mask] = [255,0,0]
     seg_im[blue_mask] = [0,0,255]
     seg_im[green_mask] = [0,255,0]
     seg_im[purp_mask] = [255,0,255]
-    save_loc = outdir + '/GT_' + regional_method + '_' + boundary_method +'_{0:04d}'.format(im_num+1) + '.png'
+    if boundary_method:
+        save_loc = outdir + '/GT_' + regional_method + '_' + boundary_method +'_{0:04d}'.format(im_num+1) + '.png'
+    else:
+        save_loc = outdir + '/GT_' + regional_method + '_nonboundary' +'_{0:04d}'.format(im_num+1) + '.png'
     imsave(save_loc,seg_im)
     print save_loc

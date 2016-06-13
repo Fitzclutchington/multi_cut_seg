@@ -1,8 +1,8 @@
 {
   "training_images": [
-    "HG001/DCM/GT/IMG0050.dcm",
-    "HG001/DCM/GT/IMG0060.dcm",
-    "HG001/DCM/GT/IMG0080.dcm"
+    "HG001/dcm/GT/IMG0050.dcm",
+    "HG001/dcm/GT/IMG0060.dcm",
+    "HG001/dcm/GT/IMG0080.dcm"
     
   ],
   "training_image_indices":  [
@@ -13,7 +13,7 @@
   "case": "HG001",
   "prefix" : "4m",
   "outdir" : "test",
-  "dicomdir": "DCM",
+  "dicomdir": "dcm",
   "groundtruthdir": "GT",
   "regional_weights": "lgr",
   "boundary_weights": "gaussian",
@@ -23,5 +23,6 @@
     "T1c",
     "T2"
     ],
-  "object_num":5
+  "object_num":5,
+  "img_type": "dcm"
 }

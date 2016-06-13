@@ -9,13 +9,14 @@
     100,
     120
   ],
+  "img_type":"dcm",
   "case": "HG011",
   "prefix" : "4m",
   "outdir" : "test",
   "dicomdir": "DCM",
   "groundtruthdir": "GT",
   "regional_weights": "lgr",
-  "boundary_weights": "lgr",
+  "boundary_weights": "none",
   "modalities": [
     "Flair",
 	  "T1",
