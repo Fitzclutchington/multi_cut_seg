@@ -16,7 +16,7 @@
   "dicomdir": "DCM",
   "groundtruthdir": "GT",
   "regional_weights": "lgr",
-  "boundary_weights": "gradient",
+  "boundary_weights": "prob",
   "modalities": [
     "Flair",
 	  "T1",

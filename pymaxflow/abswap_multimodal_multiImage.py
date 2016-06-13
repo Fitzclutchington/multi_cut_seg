@@ -52,88 +52,25 @@ def t_link_cost(std, mean, pixel):
     g[inf_mask] = .000001
     return np.abs(np.log(g))
 
-def boundary_stats_gaussian(brush_strokes,num_samples):
-    '''
-    returns mean and std of the difference between random samples from
-    brush strokes
-    '''
-    
-    
-    stat_list = []
-    num_classes = len(brush_strokes)
-    num_comb = comb(num_classes,2)
-    num_modal = brush_strokes[0].shape[1]
-    com_list = combinations(range(num_classes),2)
-    
-    for j,com in enumerate(com_list):
-        diffs = np.zeros((num_samples ** 2,num_modal))
-        class_a = brush_strokes[com[0]]
-        class_b = brush_strokes[com[1]]
-        if class_a.shape[0] < num_samples:
-            highest_ind = class_a.shape[0]
-            num_samples = class_a.shape[0]
-            mask = np.random.choice(highest_ind, highest_ind, replace=False)
-        elif class_b.shape[0] < num_samples:
-            highest_ind = class_b.shape[0]
-            num_samples = class_b.shape[0]
-            mask = np.random.choice(highest_ind, highest_ind, replace=False)
-        else:
-            highest_ind = class_a.shape[0] if class_a.shape[0] < class_b.shape[0] else class_b.shape[0]
-            mask = np.random.choice(highest_ind, num_samples, replace=False)
-        a_samples = brush_strokes[com[0]][mask]
-        b_samples = brush_strokes[com[1]][mask]
 
-        for i in range(num_samples):
-            start = i*num_samples
-            end = start +num_samples
-            diffs[start:end] = np.abs(np.subtract(np.roll(a_samples,i),b_samples))
-                
-        mean = np.mean(diffs,axis=0)
-        cov = np.cov(diffs,rowvar=0)
-        stat_list.append((mean,cov))
-    
-    return stat_list
+def neighbor_cost_prob(regional_weights,v1,v2,num_comb,com_list):
+    ''' This function creates a matrix of boundary weights of size M X N
+    where M is the number of neighbors and N is the number of combinations
+    of classes.  Boundary weights are calculated multiplying the probaility
+    that pixel i is in class x and the probability that pixel j is in class y'''
 
-def calculate_boundary_stats_lgr(brush_strokes,num_samples):
-    '''
-    returns mean and std of the difference between random samples from
-    brush strokes
-    '''
+    num_rows = v1.shape[0]
+    boundary_weights = np.zeros((num_rows,num_comb))
+    probs_v1 = regional_weights[v1]
+    probs_v2 = regional_weights[v2]
 
-    num_classes = len(brush_strokes)
-    num_modal = brush_strokes[0].shape[1]
-    com_list = combinations(range(len(brush_strokes)),2)
-    num_comb = comb(num_classes,2)
-    sample_mat = []
-    labels_mat = []
-    for j,com in enumerate(com_list):
-        diffs = []
-        class_a = brush_strokes[com[0]]
-        class_b = brush_strokes[com[1]]
-        if class_a.shape[0] < num_samples:
-            highest_ind = class_a.shape[0]
-            num_samples = class_a.shape[0]
-            mask = np.random.choice(highest_ind, highest_ind, replace=False)
-        elif class_b.shape[0] < num_samples:
-            highest_ind = class_b.shape[0]
-            num_samples = class_b.shape[0]
-            mask = np.random.choice(highest_ind, highest_ind, replace=False)
-        else:
-            highest_ind = class_a.shape[0] if class_a.shape[0] < class_b.shape[0] else class_b.shape[0]
-            mask = np.random.choice(highest_ind, num_samples, replace=False)
-        
-        a_samples = brush_strokes[com[0]][mask]
-        b_samples = brush_strokes[com[1]][mask]
-        for i in range(num_samples):
-            diffs.append(np.abs(np.subtract(np.roll(a_samples,i),b_samples)))  
-        samps = np.vstack(diffs)
-        sample_mat.append(samps)
-        labels_mat.extend([j]*samps.shape[0])
-    sample_mat = np.vstack(sample_mat)
-    lgr = LogisticRegression()
-    lgr.fit(sample_mat,labels_mat)
-    return lgr
-
+    for i,com in enumerate(com_list):
+        class_i = com[0]
+        class_j = com[1]
+        prob_i_j = np.add(probs_v1[:,class_i],probs_v2[:,class_j])
+        prob_j_i = np.add(probs_v1[:,class_j],probs_v2[:,class_i])
+        boundary_weights[:,i] = np.abs(np.add(prob_j_i,prob_i_j))
+    return boundary_weights
 
 if len(sys.argv) < 2:
     print "usage: python abswap.py json_config"
@@ -157,6 +94,7 @@ if boundary_method == "none":
     boundary_method = None
 img_type = str(task['img_type'])
 num_comb = int(comb(num_objs,2))
+com_list = combinations(range(num_objs),2)
 dirs = [case +"/"+dicomdir+"/" + m for m in modalities]
 num_modalities = len(dirs)
 
@@ -329,26 +267,10 @@ for im_num,im_slice in enumerate(mmimgs):
     ##############################################
 
     if boundary_method:
-        if boundary_method == 'boykov':
-            side_weights = neighbor_cost_boykov(image_mat[left_nodes],image_mat[right_nodes])
-            vert_weights = neighbor_cost_boykov(image_mat[down_nodes],[up_nodes])
-            boundary_weights = np.concatenate((side_weights,vert_weights))
-            boundary_weights = boundary_weights.reshape((boundary_weights.size)).astype(np.float32) 
-
-        elif boundary_method == 'gaussian':
-            bound_list = []
-            for i in range(num_comb):
-                diff = np.abs(np.subtract(image_mat[v1],image_mat[v2]))
-                mean = g_stat[i][0]
-                cov = g_stat[i][1]
-                bound_i = multivariate_normal.logpdf(diff,mean=mean,cov=cov, allow_singular=True)
-                bound_list.append(bound_i)
-            boundary_weights = np.array(bound_list).T.astype(np.float32)
-        elif boundary_method == 'gradient':
-            boundary_weights = compute_gradient(image_mat[v1],image_mat[v2]).astype(np.float32)
+        if boundary_method == 'prob':
+            boundary_weights = neighbor_cost_prob(regional_weights,v1,v2,num_comb,com_list).astype(np.float32)
         else:
-            diff = np.abs(np.subtract(image_mat[v1],image_mat[v2]))
-            boundary_weights = np.abs(lgr_bound.predict_log_proba(diff)).astype(np.float32)
+            boundary_weights = compute_gradient(image_mat[v1],image_mat[v2]).astype(np.float32)
         print regional_weights.shape
        
         # Dictionary used to add to terminal edges
@@ -400,6 +322,7 @@ for im_num,im_slice in enumerate(mmimgs):
                     g.add_edge_vectorized(e1,e2,boundary_weights[edge_mask],boundary_weights[edge_mask])
                     non_graph_weight_addition(graph_indices,r_weights,boundary_weight_dict,labels,alpha,beta,width,height)
                 else:
+                    print "boundary weights"
                     g.add_edge_vectorized(e1,e2,boundary_weights[:,count][edge_mask],boundary_weights[:,count][edge_mask])
                     non_graph_weight_addition_with_count(graph_indices,r_weights,boundary_weight_dict,labels,alpha,beta,width,height,count)
             
