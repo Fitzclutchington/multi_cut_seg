@@ -33,6 +33,14 @@ def neighbor_cost_boykov(p1, p2, alpha=100):
     cost = np.exp(e_term)
     return cost
 
+def compute_gradient(p1,p2,alpha=100):
+    diffs = np.subtract(p1,p2)
+    dsq = np.square(diffs)
+    dsum = np.sum(dsq,axis=1)
+    e_term = np.negative(dsum)/(2 * alpha * alpha)
+    cost = np.exp(e_term)
+    return cost
+
 
 def t_link_cost(std, mean, pixel):
     sqrt2xmean = math.sqrt(mean*2)
@@ -261,7 +269,8 @@ if boundary_method:
         g_stat = boundary_stats_gaussian(samples,100)
     elif boundary_method == 'lgr':
         lgr_bound = calculate_boundary_stats_lgr(samples,50)
-
+    else:
+        "brundary training unecessary"
 
 # get adjacent edges
 # right edges = (left_node[i],right_node[i])
@@ -335,7 +344,8 @@ for im_num,im_slice in enumerate(mmimgs):
                 bound_i = multivariate_normal.logpdf(diff,mean=mean,cov=cov, allow_singular=True)
                 bound_list.append(bound_i)
             boundary_weights = np.array(bound_list).T.astype(np.float32)
-
+        elif boundary_method == 'gradient':
+            boundary_weights = compute_gradient(image_mat[v1],image_mat[v2]).astype(np.float32)
         else:
             diff = np.abs(np.subtract(image_mat[v1],image_mat[v2]))
             boundary_weights = np.abs(lgr_bound.predict_log_proba(diff)).astype(np.float32)
@@ -386,7 +396,7 @@ for im_num,im_slice in enumerate(mmimgs):
             
             
             if boundary_method:
-                if boundary_method == 'boykov':
+                if boundary_method == 'boykov' or boundary_method == 'gradient':
                     g.add_edge_vectorized(e1,e2,boundary_weights[edge_mask],boundary_weights[edge_mask])
                     non_graph_weight_addition(graph_indices,r_weights,boundary_weight_dict,labels,alpha,beta,width,height)
                 else:
