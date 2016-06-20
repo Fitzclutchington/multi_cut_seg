@@ -24,8 +24,11 @@ def mask_list_bmp(brush_img):
     green_mask = np.logical_and(green_band == 255,red_band == 0)
     yellow_mask_1 = np.logical_and(red_band == 255,green_band == 255)
     yellow_mask = np.logical_and(yellow_mask_1,blue_band==0)
-    
-    return [yellow_mask, red_mask, blue_mask, green_mask]
+    purple_mask_1 = np.logical_and(red_band == 255,blue_band == 255)
+    purple_mask = np.logical_and(purple_mask_1,green_band==0)
+
+    mask_list = [red_mask, blue_mask, green_mask, yellow_mask, purple_mask]
+    return mask_list
 
 def neighbor_cost_boykov(p1, p2, alpha=100):
     pdiff = np.subtract(p1,p2)
@@ -71,6 +74,32 @@ def neighbor_cost_prob(regional_weights,v1,v2,num_comb,com_list):
         prob_j_i = np.add(probs_v1[:,class_j],probs_v2[:,class_i])
         boundary_weights[:,i] = np.abs(np.add(prob_j_i,prob_i_j))
     return boundary_weights
+
+def generate_mmimg(im_slice,im_size,num_modalities):
+    image_mat = np.zeros((im_size,num_modalities))
+    for i,img in enumerate(im_slice):
+        if img_type =="dcm":
+            image_mat[:,i] = dicom.read_file(str(img)).pixel_array.reshape((im_size))
+        else:
+            image_mat[:,i] = imread(str(img),True).reshape((im_size))
+    return image_mat
+
+def open_brush(img_type,img):
+    if img_type == "dcm":
+        brush_img = dicom.read_file(img)
+        brush_img = brush_img.pixel_array
+        width = brush_img.shape[0]
+        height = brush_img.shape[1]
+        im_size = width*height
+        brush_img = brush_img.reshape(im_size)
+    else:
+        brush_img = imread(img)
+        width = brush_img.shape[0]
+        height = brush_img.shape[1]
+        im_size = width*height
+        brush_img = brush_img.reshape((im_size,3))
+
+    return brush_img , height, width
 
 if len(sys.argv) < 2:
     print "usage: python abswap.py json_config"
@@ -131,19 +160,8 @@ for i in object_list:
 
 
 for i,img in enumerate(training_images):
-    if img_type == "dcm":
-        brush_img = dicom.read_file(img)
-        brush_img = brush_img.pixel_array
-        width = brush_img.shape[0]
-        height = brush_img.shape[1]
-        im_size = width*height
-        brush_img = brush_img.reshape(im_size)
-    else:
-        brush_img = imread(img)
-        width = brush_img.shape[0]
-        height = brush_img.shape[1]
-        im_size = width*height
-        brush_img = brush_img.reshape((im_size,3))
+    brush_img,height,width = open_brush(img_type,img)
+
     #masks for samples and intial labeling    
 
     if img_type == "dcm":
@@ -162,6 +180,7 @@ for i,img in enumerate(training_images):
         else:
             # True designates that we want a gray scale image
             current_im = imread(str(img),True)
+        im_size = current_im.size
         current_im = current_im.reshape((im_size))
         for obj_num,obj in enumerate(object_list):
             obj[k].extend(current_im[mask_list[obj_num].reshape((im_size))])
@@ -202,14 +221,21 @@ else:
 ##############################################
 indices = np.arange(im_size).reshape((height,width)).astype(np.int32)
 
+"""
 if boundary_method:
+    #TODO update boundary stats to deal with actual boundaries and not random samples
     if boundary_method =='gaussian':
         g_stat = boundary_stats_gaussian(samples,100)
     elif boundary_method == 'lgr':
+        bound_samples = []
+        bound_labels = []
+        for ind,brush in zip(training_image_indices,training_images):
+            brush_img = open_brush(img_type,brush)
+
         lgr_bound = calculate_boundary_stats_lgr(samples,50)
     else:
         "brundary training unecessary"
-
+"""
 # get adjacent edges
 # right edges = (left_node[i],right_node[i])
 left_nodes = indices[:, :-1].ravel()
@@ -237,13 +263,9 @@ v2 = v2.reshape((v2.size))
 for im_num,im_slice in enumerate(mmimgs):
 
     labels = np.random.randint(0,num_objs,(width*height)).astype(np.int32)
-
-    image_mat = np.zeros((im_size,num_modalities))
-    for i,img in enumerate(im_slice):
-        if img_type =="dcm":
-            image_mat[:,i] = dicom.read_file(str(img)).pixel_array.reshape((im_size))
-        else:
-            image_mat[:,i] = imread(str(img),True).reshape((im_size))
+    
+    image_mat = generate_mmimg(im_slice,im_size,num_modalities)
+    
     
     ##############################################
     #                                            #
@@ -322,7 +344,7 @@ for im_num,im_slice in enumerate(mmimgs):
                     g.add_edge_vectorized(e1,e2,boundary_weights[edge_mask],boundary_weights[edge_mask])
                     non_graph_weight_addition(graph_indices,r_weights,boundary_weight_dict,labels,alpha,beta,width,height)
                 else:
-                    print "boundary weights"
+                    
                     g.add_edge_vectorized(e1,e2,boundary_weights[:,count][edge_mask],boundary_weights[:,count][edge_mask])
                     non_graph_weight_addition_with_count(graph_indices,r_weights,boundary_weight_dict,labels,alpha,beta,width,height,count)
             
